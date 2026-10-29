@@ -44,3 +44,6 @@ next-env.d.ts
 # QVT: client process documents and the original brief stay on this computer only
 /docs/
 /qvt-campaign-dashboard-brief.md
+
+# Claude desktop app preview settings
+/.claude/
