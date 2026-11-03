@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, type AppRole, type AuditEntry, type Brand, type Person, type Workspace } from "@/lib/types";
@@ -37,6 +38,14 @@ export default async function AdminPage() {
       <PageTitle subtitle="Leave Mode, logins and recent activity. Only you can see this page.">Admin</PageTitle>
 
       <div className="space-y-4">
+        <Link href="/team" className="prime-gradient flex items-center justify-between rounded-3xl p-5 text-white transition hover:brightness-110">
+          <span>
+            <span className="block font-display text-xl font-black">Team</span>
+            <span className="block text-sm text-[#C9D6F5]">People, who does what on each brand, and the role catalogue</span>
+          </span>
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m9 6 6 6-6 6" /></svg>
+        </Link>
+
         <Card>
           <SectionTitle>Workspaces</SectionTitle>
           <p className="mb-3 text-sm text-muted">Each company using PRIME is a workspace, with its own brands and team.</p>

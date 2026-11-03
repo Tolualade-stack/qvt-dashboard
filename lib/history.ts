@@ -73,6 +73,12 @@ export function describeChange(entry: AuditEntry): string {
     }
   }
 
+  if (entry.table_name === "update_notes") {
+    const note = String(entry.new_data?.note ?? entry.old_data?.note ?? "");
+    const short = note.length > 90 ? `${note.slice(0, 90)}…` : note;
+    return entry.action === "delete" ? "removed an update" : `noted: "${short}"`;
+  }
+
   if (entry.table_name === "content_items") {
     if (entry.action === "insert") return `added "${label}"`;
     const fields = changedFields(entry);

@@ -6,23 +6,33 @@ import { mediaUrl } from "@/lib/media";
 import { lagosMonth, type ContentItem } from "@/lib/content";
 import { ContentCard } from "../content/content-card";
 import { ContentForm } from "../content/content-form";
+import { NoteForm } from "../notes/note-form";
+import { NoteList } from "@/components/note-list";
+import type { UpdateNote } from "@/lib/notes";
 
 export const metadata: Metadata = { title: "Update · PRIME" };
 
 // The Update screen for one world: add content pieces and move them on with one
 // tap. Notes ("What changed?") and numbers join this screen in the next steps.
-export default async function UpdatePage({ params }: PageProps<"/brands/[id]/update">) {
+export default async function UpdatePage({ params, searchParams }: PageProps<"/brands/[id]/update">) {
   const { id } = await params;
+  const tab = (await searchParams).tab === "note" ? "note" : "content";
   const { brand, theme, platforms, people, canEdit, supabase } = await loadWorld(id);
 
-  const { data: rows } = await supabase
-    .from("content_items")
-    .select("*")
-    .eq("brand_id", id)
-    .eq("is_archived", false)
-    .order("planned_date", { ascending: true, nullsFirst: false })
-    .order("created_at");
+  const [{ data: rows }, { data: noteRows }] = await Promise.all([
+    supabase
+      .from("content_items")
+      .select("*")
+      .eq("brand_id", id)
+      .eq("is_archived", false)
+      .order("planned_date", { ascending: true, nullsFirst: false })
+      .order("created_at"),
+    tab === "note"
+      ? supabase.from("update_notes").select("*").eq("brand_id", id).order("created_at", { ascending: false }).limit(30)
+      : Promise.resolve({ data: [] }),
+  ]);
   const items = (rows ?? []) as ContentItem[];
+  const notes = (noteRows ?? []) as UpdateNote[];
   const month = lagosMonth();
   const active = items.filter((i) => i.status !== "posted");
   const posted = items.filter((i) => i.status === "posted" && i.posted_at && i.posted_at >= month.startIso);
@@ -48,15 +58,40 @@ export default async function UpdatePage({ params }: PageProps<"/brands/[id]/upd
       </header>
 
       <nav aria-label="Update type" className="grid grid-cols-3 gap-1 rounded-2xl bg-mist p-1">
-        <span aria-current="page" className="flex min-h-10 items-center justify-center rounded-xl bg-white text-sm font-bold shadow-sm">Content</span>
-        <span className="flex min-h-10 flex-col items-center justify-center rounded-xl text-sm font-semibold text-muted">
-          Note <span className="text-[10px] font-medium">next</span>
-        </span>
+        {[
+          ["content", "Content", `/brands/${id}/update`],
+          ["note", "Note", `/brands/${id}/update?tab=note`],
+        ].map(([key, label, href]) => (
+          <Link
+            key={key}
+            href={href}
+            aria-current={tab === key ? "page" : undefined}
+            className={`flex min-h-10 items-center justify-center rounded-xl text-sm ${tab === key ? "bg-white font-bold shadow-sm" : "font-semibold text-muted"}`}
+          >
+            {label}
+          </Link>
+        ))}
         <span className="flex min-h-10 flex-col items-center justify-center rounded-xl text-sm font-semibold text-muted">
           Numbers <span className="text-[10px] font-medium">Phase 3</span>
         </span>
       </nav>
 
+      {tab === "note" ? (
+        <>
+          {canEdit ? (
+            <section className="rounded-[20px] bg-mist p-4">
+              <NoteForm brandId={id} items={items.map((i) => ({ id: i.id, title: i.title }))} theme={theme} />
+            </section>
+          ) : (
+            <p className="rounded-2xl bg-mist p-4 text-sm text-muted">You can read this world&apos;s updates, but not add them.</p>
+          )}
+          <section>
+            <h2 className="mb-1 font-display text-xl font-black">Latest updates</h2>
+            <NoteList notes={notes} itemTitleOf={new Map(items.map((i) => [i.id, i.title]))} />
+          </section>
+        </>
+      ) : (
+        <>
       {canEdit ? (
         <ContentForm brandId={id} platforms={platforms} people={people} defaultNeedsApproval={brand.tier === "heavy"} />
       ) : (
@@ -96,6 +131,8 @@ export default async function UpdatePage({ params }: PageProps<"/brands/[id]/upd
           ))}
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 }

@@ -9,11 +9,10 @@ import type { ReactNode } from "react";
 
 const icons: Record<string, ReactNode> = {
   home: <path d="M3 11 12 4l9 7M5 10v10h14V10" />,
-  team: (
+  log: (
     <>
-      <circle cx="9" cy="8" r="3.5" />
-      <path d="M2.5 20c1-3.5 3.6-5.5 6.5-5.5s5.5 2 6.5 5.5" />
-      <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.7 3 2.5 3.5 5.2" />
+      <path d="M8 6h12M8 12h12M8 18h12" />
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
     </>
   ),
   admin: (
@@ -40,9 +39,17 @@ function Icon({ name }: { name: string }) {
 
 export function BottomNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
-  const isActive = (href: string) => (href === "/" ? pathname === "/" || pathname.startsWith("/brands") : pathname.startsWith(href));
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/" || pathname.startsWith("/brands");
+    if (href === "/admin") return pathname.startsWith("/admin") || pathname.startsWith("/team");
+    return pathname.startsWith(href);
+  };
 
-  const left = [{ href: "/", label: "Home", icon: "home" }, ...(isAdmin ? [{ href: "/team", label: "Team", icon: "team" }] : [])];
+  // Team management lives inside Admin, so the bar keeps five large buttons.
+  const left = [
+    { href: "/", label: "Home", icon: "home" },
+    { href: "/log", label: "Log", icon: "log" },
+  ];
   const right = [...(isAdmin ? [{ href: "/admin", label: "Admin", icon: "admin" }] : []), { href: "/account", label: "My account", icon: "account" }];
 
   const item = (link: { href: string; label: string; icon: string }) => (

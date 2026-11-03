@@ -33,6 +33,10 @@ export default async function TeamPage() {
 
   return (
     <>
+      <Link href="/admin" className="mb-3 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-muted hover:text-ink">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m15 6-6 6 6 6" /></svg>
+        Admin
+      </Link>
       <PageTitle subtitle="Add people, put them on brands, and move them when projects change. One person can hold several roles.">
         Team
       </PageTitle>

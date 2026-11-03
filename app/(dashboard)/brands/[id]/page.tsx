@@ -9,6 +9,7 @@ import { formatDateTime, timeAgo } from "@/lib/format";
 import { describeChange, whoDidIt } from "@/lib/history";
 import { CHANNELS, MARKETING_TYPES, labelFor } from "@/lib/campaign";
 import { monthCounts, type ContentItem } from "@/lib/content";
+import type { UpdateNote } from "@/lib/notes";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
 import { Badge, LiveDot } from "@/components/ui";
 import { WorldPerformance } from "@/components/world-performance";
@@ -22,12 +23,13 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   const supabase = await createClient();
   const me = (await getCurrentUser())!;
 
-  const [{ data: brandRow }, { data: roleRows }, { data: peopleRows }, { data: historyRows }, { data: contentRows }] = await Promise.all([
+  const [{ data: brandRow }, { data: roleRows }, { data: peopleRows }, { data: historyRows }, { data: contentRows }, { data: noteRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
     supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
     supabase.from("people").select("id, slug, full_name, is_placeholder"),
     supabase.from("audit_log").select("*").eq("table_name", "brands").eq("row_id", id).order("changed_at", { ascending: false }).limit(8),
     supabase.from("content_items").select("*").eq("brand_id", id),
+    supabase.from("update_notes").select("*").eq("brand_id", id).order("created_at", { ascending: false }).limit(8),
   ]);
   if (!brandRow) notFound();
 
@@ -42,7 +44,18 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   const { data: contentHistory } = contentIds.length
     ? await supabase.from("audit_log").select("*").eq("table_name", "content_items").in("row_id", contentIds).order("changed_at", { ascending: false }).limit(8)
     : { data: [] };
-  const history = [...((historyRows ?? []) as AuditEntry[]), ...((contentHistory ?? []) as AuditEntry[])]
+  // Notes join the same feed, shown as "Viche noted: …".
+  const noteEntries: AuditEntry[] = ((noteRows ?? []) as UpdateNote[]).map((n, i) => ({
+    id: -1 - i,
+    table_name: "update_notes",
+    row_id: n.id,
+    action: "insert",
+    changed_by_name: n.author_name,
+    changed_at: n.created_at,
+    old_data: null,
+    new_data: { note: n.note },
+  }));
+  const history = [...((historyRows ?? []) as AuditEntry[]), ...((contentHistory ?? []) as AuditEntry[]), ...noteEntries]
     .sort((a, b) => b.changed_at.localeCompare(a.changed_at))
     .slice(0, 8);
   const coverName = people.get(brand.leave_cover_person_id ?? "")?.full_name;

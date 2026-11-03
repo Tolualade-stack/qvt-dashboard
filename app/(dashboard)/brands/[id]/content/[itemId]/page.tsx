@@ -6,6 +6,8 @@ import { formatDateTime } from "@/lib/format";
 import { STATUS_LABELS, statusTone, type ContentItem } from "@/lib/content";
 import type { AuditEntry } from "@/lib/types";
 import { HistoryList } from "@/components/history-list";
+import { NoteList } from "@/components/note-list";
+import type { UpdateNote } from "@/lib/notes";
 import { Card, SectionTitle } from "@/components/ui";
 import { ContentForm } from "../content-form";
 
@@ -16,9 +18,10 @@ export default async function ContentItemPage({ params }: PageProps<"/brands/[id
   const { id, itemId } = await params;
   const { brand, theme, platforms, people, canEdit, supabase } = await loadWorld(id);
 
-  const [{ data: row }, { data: historyRows }] = await Promise.all([
+  const [{ data: row }, { data: historyRows }, { data: noteRows }] = await Promise.all([
     supabase.from("content_items").select("*").eq("id", itemId).eq("brand_id", id).maybeSingle(),
     supabase.from("audit_log").select("*").eq("table_name", "content_items").eq("row_id", itemId).order("changed_at", { ascending: false }),
+    supabase.from("update_notes").select("*").eq("content_item_id", itemId).order("created_at", { ascending: false }),
   ]);
   if (!row) notFound();
   const item = row as ContentItem;
@@ -62,6 +65,21 @@ export default async function ContentItemPage({ params }: PageProps<"/brands/[id
           ))}
         </dl>
         {item.notes && <p className="mt-3 border-t border-line pt-3 text-sm">{item.notes}</p>}
+      </Card>
+
+      <Card>
+        <SectionTitle
+          action={
+            canEdit && (
+              <Link href={`/brands/${id}/update?tab=note`} className="text-sm font-bold" style={{ color: theme.ink }}>
+                + Add
+              </Link>
+            )
+          }
+        >
+          Updates about this piece
+        </SectionTitle>
+        <NoteList notes={(noteRows ?? []) as UpdateNote[]} />
       </Card>
 
       <Card>
