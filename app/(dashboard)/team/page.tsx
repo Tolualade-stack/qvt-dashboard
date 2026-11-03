@@ -28,7 +28,7 @@ export default async function TeamPage() {
   const catalogue = (catalogueRows ?? []) as CatalogueRole[];
   const brandOf = new Map(brands.map((b) => [b.id, b]));
 
-  const brandOptions = brands.map((b) => ({ id: b.id, name: b.name }));
+  const brandOptions = brands.filter((b) => !b.is_archived).map((b) => ({ id: b.id, name: b.name }));
   const roleOptions = catalogue.map((r) => ({ id: r.id, name: r.name }));
 
   return (

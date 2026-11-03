@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, type AppRole, type AuditEntry, type Brand, type Person, type Workspace } from "@/lib/types";
 import { Badge, BrandStripe, Button, Card, PageTitle, SectionTitle } from "@/components/ui";
 import { HistoryList } from "@/components/history-list";
-import { setLeaveMode, setLoginActive } from "./actions";
+import { setBrandArchived, setLeaveMode, setLoginActive } from "./actions";
 import { AddWorkspaceForm, CreateLoginForm, ResetPasswordForm } from "./forms";
 
 export const metadata: Metadata = { title: "Admin · PRIME" };
@@ -57,32 +57,47 @@ export default async function AdminPage() {
         </Card>
 
         <Card>
-          <SectionTitle>Leave Mode</SectionTitle>
+          <SectionTitle>Brands &amp; Leave Mode</SectionTitle>
           <p className="mb-3 text-sm text-muted">
-            Switch on when you go on leave. The brand&apos;s leave cover can then edit that brand until you switch
-            it off.
+            Turn Leave Mode on when you go on leave: the brand&apos;s leave cover can then edit it until you turn it
+            off. Archive a brand to take it off Home; its data and history are kept.
           </p>
           <ul className="space-y-3">
             {brands.map((brand) => (
-              <li key={brand.id} className="rounded-2xl border border-line p-4">
+              <li key={brand.id} className={`rounded-2xl border border-line p-4 ${brand.is_archived ? "opacity-60" : ""}`}>
                 <BrandStripe colour={brand.colour} />
-                <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="font-medium">{brand.name}</div>
+                    <div className="font-semibold">{brand.name}</div>
                     <div className="text-sm text-muted">
                       Cover: {nameOf.get(brand.leave_cover_person_id ?? "") ?? "not set"}
                     </div>
                   </div>
-                  <form action={setLeaveMode}>
-                    <input type="hidden" name="brandId" value={brand.id} />
-                    <input type="hidden" name="on" value={String(!brand.leave_mode_on)} />
-                    <Button variant={brand.leave_mode_on ? "danger" : "secondary"}>
-                      {brand.leave_mode_on ? "Turn off" : "Turn on"}
-                    </Button>
-                  </form>
+                  <div className="flex gap-2">
+                    {!brand.is_archived && (
+                      <form action={setLeaveMode}>
+                        <input type="hidden" name="brandId" value={brand.id} />
+                        <input type="hidden" name="on" value={String(!brand.leave_mode_on)} />
+                        <Button variant={brand.leave_mode_on ? "danger" : "secondary"} className="min-h-10 px-4">
+                          {brand.leave_mode_on ? "Leave off" : "Leave on"}
+                        </Button>
+                      </form>
+                    )}
+                    <form action={setBrandArchived}>
+                      <input type="hidden" name="brandId" value={brand.id} />
+                      <input type="hidden" name="archived" value={String(!brand.is_archived)} />
+                      <Button variant="secondary" className="min-h-10 px-4">{brand.is_archived ? "Restore" : "Archive"}</Button>
+                    </form>
+                  </div>
                 </div>
                 <div className="mt-2">
-                  {brand.leave_mode_on ? <Badge tone="amber">On: cover can edit</Badge> : <Badge>Off</Badge>}
+                  {brand.is_archived ? (
+                    <Badge>Archived</Badge>
+                  ) : brand.leave_mode_on ? (
+                    <Badge tone="amber">Leave Mode on: cover can edit</Badge>
+                  ) : (
+                    <Badge>Leave Mode off</Badge>
+                  )}
                 </div>
               </li>
             ))}

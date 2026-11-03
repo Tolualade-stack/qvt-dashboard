@@ -36,6 +36,18 @@ export async function addWorkspace(_prev: FormState, formData: FormData): Promis
   return ok(`Workspace "${name}" added.`);
 }
 
+// Archives a brand (hidden from Home, all data kept) or restores it.
+export async function setBrandArchived(formData: FormData) {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("brands")
+    .update({ is_archived: formData.get("archived") === "true" })
+    .eq("id", String(formData.get("brandId")));
+  if (error) throw new Error(error.message);
+  revalidatePath("/", "layout");
+}
+
 // Turns a brand's Leave Mode on or off.
 export async function setLeaveMode(formData: FormData) {
   await requireAdmin();

@@ -6,11 +6,17 @@ import { signOut } from "@/app/login/actions";
 import { Button, Card } from "@/components/ui";
 import { PrimeMark, PrimeWordmark } from "@/components/prime-logo";
 import { BottomNav } from "@/components/bottom-nav";
+import { IntroSplash } from "@/components/intro-splash";
 
 // The frame around every logged-in page: header, floating menu bar.
 // The "(dashboard)" folder name groups these pages without adding to the URL.
 export default async function DashboardLayout({ children }: LayoutProps<"/">) {
-  const me = await getCurrentUser();
+  // Both at once, so the page waits for one round trip instead of two.
+  const supabase = await createClient();
+  const [me, { data: workspace }] = await Promise.all([
+    getCurrentUser(),
+    supabase.from("workspaces").select("name").order("sort_order").limit(1).maybeSingle(),
+  ]);
 
   // Logged in, but the login has no active profile (never set up, or deactivated).
   if (!me) {
@@ -26,10 +32,6 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
       </main>
     );
   }
-
-  // During the pilot there is one workspace; its name shows in the header.
-  const supabase = await createClient();
-  const { data: workspace } = await supabase.from("workspaces").select("name").order("sort_order").limit(1).maybeSingle();
 
   return (
     <div className="min-h-dvh pb-32">
@@ -47,6 +49,7 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
       </header>
       <main className="mx-auto max-w-3xl px-5 py-4">{children}</main>
       <BottomNav isAdmin={me.role === "admin"} />
+      <IntroSplash />
     </div>
   );
 }

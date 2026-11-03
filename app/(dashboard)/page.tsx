@@ -12,7 +12,7 @@ export default async function HomePage() {
   const me = (await getCurrentUser())!;
   const supabase = await createClient();
   const [{ data: brandRows }, { data: roles }, { data: peopleRows }] = await Promise.all([
-    supabase.from("brands").select("*").order("sort_order"),
+    supabase.from("brands").select("*").eq("is_archived", false).order("sort_order"),
     supabase.from("brand_roles").select("brand_id, person_id").is("ended_at", null),
     supabase.from("people").select("id, full_name"),
   ]);

@@ -48,7 +48,7 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
   return (
     <>
       <section
-        className="relative mb-5 overflow-hidden rounded-[30px] p-6 text-white"
+        className="relative overflow-hidden rounded-[30px] px-6 pt-8 pb-14 text-white"
         style={{ background: `linear-gradient(150deg, ${brand.colour} 0%, #0b1f4b 75%, #000000 120%)` }}
       >
         <div className="prime-fade-up text-xs font-bold tracking-[0.25em] text-white/80">WELCOME TO THE WORLD OF</div>
@@ -56,6 +56,46 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
           {brand.name}
         </h1>
         <p className="prime-fade-up mt-3 text-sm text-white/85" style={{ animationDelay: "0.3s" }}>{brand.scope}</p>
+      </section>
+
+      {/* Brand profile. The round spot becomes the brand's logo when onboarding adds uploads. */}
+      <section aria-label="Brand profile" className="relative mb-5 px-1">
+        <span
+          className="-mt-10 ml-5 flex size-20 items-center justify-center rounded-full bg-white font-display text-3xl font-black shadow-lg ring-4 ring-white"
+          style={{ color: brand.colour }}
+        >
+          {brand.name.slice(0, 1)}
+        </span>
+        {brand.about && <p className="mt-4 text-[15px] leading-relaxed text-ink">{brand.about}</p>}
+        {brand.website && (
+          <a
+            href={brand.website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex min-h-9 items-center gap-1.5 text-sm font-bold"
+            style={{ color: brand.colour }}
+          >
+            {brand.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
+          </a>
+        )}
+        {(brand.industry || brand.category || brand.products.length > 0) && (
+          <ul className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-4">
+            {[
+              ["Industry", brand.industry, 1],
+              ["Category", brand.category, 0.7],
+              ["Products", brand.products.join(" · "), 0.45],
+            ].map(([label, value, strength]) => (
+              <li key={label as string}>
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
+                  <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: brand.colour, opacity: strength as number }} />
+                  {label}
+                </span>
+                <span className="mt-1 block text-sm font-bold">{(value as string) || "Not set"}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <div className="space-y-4">

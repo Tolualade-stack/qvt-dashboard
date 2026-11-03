@@ -34,6 +34,9 @@ export function describeChange(entry: AuditEntry): string {
     if (fields.length === 1 && fields[0] === "leave_mode_on") {
       return `turned Leave Mode ${entry.new_data?.leave_mode_on ? "on" : "off"} for ${label}`;
     }
+    if (fields.length === 1 && fields[0] === "is_archived") {
+      return `${entry.new_data?.is_archived ? "archived" : "restored"} ${label}`;
+    }
     if (fields.length === 1 && fields[0] === "canva_calendar_url") {
       return entry.new_data?.canva_calendar_url
         ? `set the Canva calendar link for ${label}`

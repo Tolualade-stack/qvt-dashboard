@@ -18,6 +18,12 @@ export type Brand = {
   leave_cover_person_id: string | null;
   leave_mode_on: boolean;
   workspace_id: string;
+  is_archived: boolean;
+  about: string | null;
+  website: string | null;
+  industry: string | null;
+  category: string | null;
+  products: string[];
   updated_at: string;
 };
 

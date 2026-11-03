@@ -26,10 +26,10 @@ export async function proxy(request: NextRequest) {
   });
 
   // Do not put code between creating the client and this call: it is what
-  // refreshes the session.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // refreshes the session. getClaims() checks the login token's signature on the
+  // server itself, without a round trip to Supabase, so every tap stays quick.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims;
 
   const isLoginPage = request.nextUrl.pathname === "/login";
   if (!user && !isLoginPage) {
