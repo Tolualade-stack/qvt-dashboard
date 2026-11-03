@@ -1,5 +1,6 @@
 import type { AuditEntry } from "@/lib/types";
 import { STATUS_LABELS, type ContentStatus } from "@/lib/content";
+import { AD_STATUS_LABELS, money, type AdStatus, type Currency } from "@/lib/ads";
 
 // Turns a raw audit_log row into a short sentence for the history lists,
 // e.g. "turned Leave Mode on for Alieve".
@@ -39,6 +40,7 @@ const IGNORED_FIELDS = new Set([
   "created_at", "created_by", "updated_at", "updated_by",
   // Set automatically alongside a status change.
   "status_changed_at", "copy_ready_at", "posted_at", "revision_round",
+  "went_live_at", "ended_at", "spend_updated_at", "issue_note", "resolved_at", "requested_at",
 ]);
 
 function changedFields(entry: AuditEntry): string[] {
@@ -77,6 +79,26 @@ export function describeChange(entry: AuditEntry): string {
     const note = String(entry.new_data?.note ?? entry.old_data?.note ?? "");
     const short = note.length > 90 ? `${note.slice(0, 90)}…` : note;
     return entry.action === "delete" ? "removed an update" : `noted: "${short}"`;
+  }
+
+  if (entry.table_name === "ads") {
+    if (entry.action === "insert") return `added the ad "${label}"`;
+    const fields = changedFields(entry);
+    if (fields.includes("status")) {
+      return `moved the ad "${label}" to ${AD_STATUS_LABELS[entry.new_data?.status as AdStatus] ?? entry.new_data?.status}`;
+    }
+    if (fields.includes("issue_raised_at")) {
+      return entry.new_data?.issue_raised_at ? `raised an issue on "${label}": ${entry.new_data?.issue_note}` : `resolved the issue on "${label}"`;
+    }
+    if (fields.length === 1 && fields[0] === "spend_to_date") {
+      return `updated spend on "${label}" to ${money(Number(entry.new_data?.spend_to_date), entry.new_data?.currency as Currency)}`;
+    }
+  }
+
+  if (entry.table_name === "fund_requests") {
+    const amount = money(Number(row.amount), row.currency as Currency);
+    if (entry.action === "insert") return `requested ${amount} in funds`;
+    if (changedFields(entry).includes("status")) return `marked the ${amount} fund request as ${entry.new_data?.status}`;
   }
 
   if (entry.table_name === "content_items") {

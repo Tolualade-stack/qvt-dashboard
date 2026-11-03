@@ -10,6 +10,7 @@ import { describeChange, whoDidIt } from "@/lib/history";
 import { CHANNELS, MARKETING_TYPES, labelFor } from "@/lib/campaign";
 import { monthCounts, type ContentItem } from "@/lib/content";
 import type { UpdateNote } from "@/lib/notes";
+import { hoursSince, spendSummary, type Ad, type FundRequest } from "@/lib/ads";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
 import { Badge, LiveDot } from "@/components/ui";
 import { WorldPerformance } from "@/components/world-performance";
@@ -23,13 +24,24 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   const supabase = await createClient();
   const me = (await getCurrentUser())!;
 
-  const [{ data: brandRow }, { data: roleRows }, { data: peopleRows }, { data: historyRows }, { data: contentRows }, { data: noteRows }] = await Promise.all([
+  const [
+    { data: brandRow },
+    { data: roleRows },
+    { data: peopleRows },
+    { data: historyRows },
+    { data: contentRows },
+    { data: noteRows },
+    { data: adRows },
+    { data: fundRows },
+  ] = await Promise.all([
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
     supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
     supabase.from("people").select("id, slug, full_name, is_placeholder"),
     supabase.from("audit_log").select("*").eq("table_name", "brands").eq("row_id", id).order("changed_at", { ascending: false }).limit(8),
     supabase.from("content_items").select("*").eq("brand_id", id),
     supabase.from("update_notes").select("*").eq("brand_id", id).order("created_at", { ascending: false }).limit(8),
+    supabase.from("ads").select("*").eq("brand_id", id).eq("is_archived", false),
+    supabase.from("fund_requests").select("*").eq("brand_id", id).eq("status", "pending"),
   ]);
   if (!brandRow) notFound();
 
@@ -38,6 +50,19 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   const people = new Map(((peopleRows ?? []) as Person[]).map((p) => [p.id, p]));
   const content = (contentRows ?? []) as ContentItem[];
   const counts = monthCounts(content);
+
+  // Ads: spend per channel (never mixing ₦ and $), and the warnings that matter.
+  const ads = (adRows ?? []) as Ad[];
+  const pendingFunds = (fundRows ?? []) as FundRequest[];
+  const spendByChannel: Record<string, string | null> = { all: spendSummary(ads) };
+  for (const channelId of brand.channels) spendByChannel[channelId] = spendSummary(ads.filter((a) => a.channel === channelId));
+  const overview = {
+    live: ads.filter((a) => a.status === "live").length,
+    paused: ads.filter((a) => a.status === "paused").length,
+    issues: ads.filter((a) => a.issue_raised_at).length,
+    pendingFunds: pendingFunds.length,
+    lateFunds: pendingFunds.filter((f) => hoursSince(f.requested_at) > 24).length,
+  };
 
   // "Latest in this world": changes to the brand and to its content, newest first.
   const contentIds = content.map((c) => c.id);
@@ -141,6 +166,14 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
             {logo ? <Image src={logo} alt={`${brand.name} logo`} fill sizes="76px" className="object-contain p-1" /> : brand.name.slice(0, 1)}
           </span>
           <div className="mt-9 flex flex-wrap gap-1.5">
+            {overview.lateFunds > 0 && (
+              <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">Fund request over 24 h</span>
+            )}
+            {overview.issues > 0 && (
+              <span className="rounded-full bg-[#FFF1D6] px-2.5 py-1 text-xs font-bold text-[#8A3B00]">
+                {overview.issues} ad {overview.issues === 1 ? "issue" : "issues"} open
+              </span>
+            )}
             {brand.leave_mode_on && (
               <span className="rounded-full bg-[#FFF1D6] px-2.5 py-1 text-xs font-bold text-[#8A3B00]">Leave Mode: {coverName} can edit</span>
             )}
@@ -181,7 +214,13 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         </ul>
       </section>
 
-      <WorldPerformance channels={channels.map((c) => ({ id: c.id, label: c.label, formats: c.formats }))} theme={theme} />
+      <WorldPerformance
+        channels={channels.map((c) => ({ id: c.id, label: c.label, formats: c.formats }))}
+        theme={theme}
+        ads={ads.map((a) => ({ channel: a.channel, format: a.format, status: a.status }))}
+        spendByChannel={spendByChannel}
+        overview={overview}
+      />
 
       {/* Creative assets deployed */}
       <section className="mt-3.5 flex items-center gap-4 rounded-[22px] bg-ink p-5 text-white">

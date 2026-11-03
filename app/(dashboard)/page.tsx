@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { greeting, longDate } from "@/lib/format";
 import type { Brand, Person } from "@/lib/types";
 import { monthCounts, type ContentItem } from "@/lib/content";
+import { hoursSince, type Ad, type FundRequest } from "@/lib/ads";
 import { LiveDot } from "@/components/ui";
 import { PGlyph } from "@/components/prime-logo";
 import { WorldCard } from "@/components/world-card";
@@ -13,13 +14,27 @@ import { WorldCard } from "@/components/world-card";
 export default async function HomePage() {
   const me = (await getCurrentUser())!;
   const supabase = await createClient();
-  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }] = await Promise.all([
+  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }, { data: adRows }, { data: fundRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("is_archived", false).order("sort_order"),
     supabase.from("people").select("id, full_name"),
     supabase.from("content_items").select("brand_id, status, planned_date, posted_at, is_archived"),
+    supabase.from("ads").select("brand_id, status, issue_raised_at").eq("is_archived", false),
+    supabase.from("fund_requests").select("brand_id, requested_at").eq("status", "pending"),
   ]);
   const content = (contentRows ?? []) as ContentItem[];
+  const ads = (adRows ?? []) as Pick<Ad, "brand_id" | "status" | "issue_raised_at">[];
+  const funds = (fundRows ?? []) as Pick<FundRequest, "brand_id" | "requested_at">[];
   const postedThisMonth = (brandId: string) => monthCounts(content.filter((c) => c.brand_id === brandId)).posted;
+  const adsLive = (brandId: string) => ads.filter((a) => a.brand_id === brandId && a.status === "live").length;
+
+  // The card's warning pill, most urgent first.
+  const flagFor = (brand: Brand): string | null => {
+    if (funds.some((f) => f.brand_id === brand.id && hoursSince(f.requested_at) > 24)) return "Fund request over 24 h";
+    const issues = ads.filter((a) => a.brand_id === brand.id && a.issue_raised_at).length;
+    if (issues) return `${issues} ad ${issues === 1 ? "issue" : "issues"} open`;
+    if (brand.leave_mode_on) return `Leave Mode: ${nameOf.get(brand.leave_cover_person_id ?? "") ?? "cover"}`;
+    return null;
+  };
   const brands = (brandRows ?? []) as Brand[];
   const nameOf = new Map(((peopleRows ?? []) as Pick<Person, "id" | "full_name">[]).map((p) => [p.id, p.full_name]));
   const onLeave = brands.filter((b) => b.leave_mode_on).length;
@@ -76,9 +91,9 @@ export default async function HomePage() {
           <WorldCard
             key={brand.id}
             brand={brand}
-            // Ads and reach fill in with the ads tracker and live numbers (Phase 3).
-            stats={{ posted: postedThisMonth(brand.id), adsLive: 0, reach: null }}
-            flag={brand.leave_mode_on ? `Leave Mode: ${nameOf.get(brand.leave_cover_person_id ?? "") ?? "cover"}` : null}
+            // Reach fills in with live numbers (Phase 3).
+            stats={{ posted: postedThisMonth(brand.id), adsLive: adsLive(brand.id), reach: null }}
+            flag={flagFor(brand)}
           />
         ))}
       </div>

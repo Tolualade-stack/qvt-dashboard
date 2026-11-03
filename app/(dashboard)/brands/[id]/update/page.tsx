@@ -9,6 +9,10 @@ import { ContentForm } from "../content/content-form";
 import { NoteForm } from "../notes/note-form";
 import { NoteList } from "@/components/note-list";
 import type { UpdateNote } from "@/lib/notes";
+import type { Ad, FundRequest } from "@/lib/ads";
+import { CHANNELS } from "@/lib/campaign";
+import { AdCard } from "../ads/ad-card";
+import { AdForm } from "../ads/ad-form";
 
 export const metadata: Metadata = { title: "Update · PRIME" };
 
@@ -16,10 +20,12 @@ export const metadata: Metadata = { title: "Update · PRIME" };
 // tap. Notes ("What changed?") and numbers join this screen in the next steps.
 export default async function UpdatePage({ params, searchParams }: PageProps<"/brands/[id]/update">) {
   const { id } = await params;
-  const tab = (await searchParams).tab === "note" ? "note" : "content";
+  const requested = (await searchParams).tab;
+  const tab = requested === "note" || requested === "ads" ? requested : "content";
   const { brand, theme, platforms, people, canEdit, supabase } = await loadWorld(id);
+  const channels = CHANNELS.filter((c) => brand.channels.includes(c.id)).map((c) => ({ id: c.id, label: c.label, formats: c.formats }));
 
-  const [{ data: rows }, { data: noteRows }] = await Promise.all([
+  const [{ data: rows }, { data: noteRows }, { data: adRows }, { data: fundRows }] = await Promise.all([
     supabase
       .from("content_items")
       .select("*")
@@ -30,9 +36,19 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
     tab === "note"
       ? supabase.from("update_notes").select("*").eq("brand_id", id).order("created_at", { ascending: false }).limit(30)
       : Promise.resolve({ data: [] }),
+    tab === "ads"
+      ? supabase.from("ads").select("*").eq("brand_id", id).eq("is_archived", false).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    tab === "ads"
+      ? supabase.from("fund_requests").select("*").eq("brand_id", id).eq("status", "pending").order("requested_at")
+      : Promise.resolve({ data: [] }),
   ]);
   const items = (rows ?? []) as ContentItem[];
   const notes = (noteRows ?? []) as UpdateNote[];
+  const ads = (adRows ?? []) as Ad[];
+  const funds = (fundRows ?? []) as FundRequest[];
+  const runningAds = ads.filter((a) => a.status !== "ended");
+  const endedAds = ads.filter((a) => a.status === "ended");
   const month = lagosMonth();
   const active = items.filter((i) => i.status !== "posted");
   const posted = items.filter((i) => i.status === "posted" && i.posted_at && i.posted_at >= month.startIso);
@@ -57,9 +73,10 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
         </div>
       </header>
 
-      <nav aria-label="Update type" className="grid grid-cols-3 gap-1 rounded-2xl bg-mist p-1">
+      <nav aria-label="Update type" className="grid grid-cols-4 gap-1 rounded-2xl bg-mist p-1">
         {[
           ["content", "Content", `/brands/${id}/update`],
+          ["ads", "Ads", `/brands/${id}/update?tab=ads`],
           ["note", "Note", `/brands/${id}/update?tab=note`],
         ].map(([key, label, href]) => (
           <Link
@@ -76,7 +93,50 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
         </span>
       </nav>
 
-      {tab === "note" ? (
+      {tab === "ads" ? (
+        <>
+          {canEdit ? (
+            <AdForm brandId={id} channels={channels} people={people} />
+          ) : (
+            <p className="rounded-2xl bg-mist p-4 text-sm text-muted">You can view this world&apos;s ads, but not change them.</p>
+          )}
+          <section>
+            <h2 className="mb-2 font-display text-xl font-black">Running <span className="text-base text-muted">· {runningAds.length}</span></h2>
+            {runningAds.length === 0 && <p className="text-sm text-muted">No ads yet. Add each ad as it is set up.</p>}
+            <div className="space-y-3">
+              {runningAds.map((ad) => (
+                <AdCard
+                  key={ad.id}
+                  ad={ad}
+                  funds={funds.filter((f) => f.ad_id === ad.id)}
+                  theme={theme}
+                  channelLabel={channels.find((c) => c.id === ad.channel)?.label ?? ad.channel}
+                  ownerName={ad.owner_person_id ? (nameOf.get(ad.owner_person_id) ?? null) : null}
+                  canEdit={canEdit}
+                />
+              ))}
+            </div>
+          </section>
+          {endedAds.length > 0 && (
+            <section>
+              <h2 className="mb-2 font-display text-xl font-black">Ended <span className="text-base text-muted">· {endedAds.length}</span></h2>
+              <div className="space-y-3">
+                {endedAds.map((ad) => (
+                  <AdCard
+                    key={ad.id}
+                    ad={ad}
+                    funds={[]}
+                    theme={theme}
+                    channelLabel={channels.find((c) => c.id === ad.channel)?.label ?? ad.channel}
+                    ownerName={ad.owner_person_id ? (nameOf.get(ad.owner_person_id) ?? null) : null}
+                    canEdit={canEdit}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      ) : tab === "note" ? (
         <>
           {canEdit ? (
             <section className="rounded-[20px] bg-mist p-4">

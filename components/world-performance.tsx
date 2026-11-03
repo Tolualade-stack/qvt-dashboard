@@ -1,21 +1,47 @@
 "use client";
 
 import { useState } from "react";
+import { AD_STATUS_LABELS, adTone, type AdStatus } from "@/lib/ads";
 
 // A world's Performance section: tap a channel to see its headline numbers and
-// its ad formats. Numbers show "–" until they are uploaded (Phase 3); the layout
-// and channels are real.
+// its ads by format. Reach, impressions and the rest arrive with live numbers
+// (Phase 3); ad spend and ad status come from the ads tracker now.
 
 type Theme = { main: string; deep: string; ink: string; soft: string; onMain: string };
 type Channel = { id: string; label: string; formats: readonly string[] };
+export type AdSummary = { channel: string; format: string | null; status: AdStatus };
+export type AdsOverview = { live: number; paused: number; issues: number; pendingFunds: number; lateFunds: number };
 
-const METRICS = ["Impressions", "Likes", "Clicks", "Followers gained", "Video views", "Ad spend"];
+const METRICS = ["Impressions", "Likes", "Clicks", "Followers gained", "Video views"];
 
-export function WorldPerformance({ channels, theme }: { channels: Channel[]; theme: Theme }) {
+export function WorldPerformance({
+  channels,
+  theme,
+  ads,
+  spendByChannel,
+  overview,
+}: {
+  channels: Channel[];
+  theme: Theme;
+  ads: AdSummary[];
+  spendByChannel: Record<string, string | null>; // "all" plus each channel id
+  overview: AdsOverview;
+}) {
   const [selected, setSelected] = useState("all");
   const current = channels.find((c) => c.id === selected);
   const channelName = current?.label ?? "All channels";
   const tabs = [{ id: "all", label: "All" }, ...channels];
+  const spend = spendByChannel[selected] ?? null;
+
+  // For one format: the most important status among its ads (live first).
+  const formatStatus = (channel: string, format: string): { label: string; status: AdStatus } => {
+    const matching = ads.filter((a) => a.channel === channel && a.format === format);
+    for (const s of ["live", "paused", "set_up", "ended"] as AdStatus[]) {
+      const n = matching.filter((a) => a.status === s).length;
+      if (n) return { label: n > 1 ? `${n} ${AD_STATUS_LABELS[s].toLowerCase()}` : AD_STATUS_LABELS[s], status: s };
+    }
+    return { label: "Not started", status: "not_started" };
+  };
 
   return (
     <>
@@ -56,27 +82,51 @@ export function WorldPerformance({ channels, theme }: { channels: Channel[]; the
               <div className="font-display text-[26px] leading-tight font-black" style={{ color: theme.ink }}>–</div>
             </div>
           ))}
+          <div className="rounded-[18px] p-3.5" style={{ backgroundColor: theme.soft }}>
+            <div className="text-xs text-muted">Ad spend</div>
+            <div className="font-display text-[26px] leading-tight font-black" style={{ color: theme.ink }}>{spend ?? "–"}</div>
+            <div className="text-xs font-semibold text-muted">{spend ? "from the ads tracker" : "no spend logged"}</div>
+          </div>
         </div>
-        <p className="mt-2 text-xs text-muted">No numbers uploaded yet. They arrive with live numbers in Phase 3.</p>
+        <p className="mt-2 text-xs text-muted">Reach, impressions and the rest arrive with live numbers in Phase 3.</p>
       </section>
 
       <section className="mt-5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
         <h2 className="text-base font-bold">Ads by format · {channelName}</h2>
         {current ? (
           <ul className="mt-1">
-            {current.formats.map((format) => (
-              <li key={format} className="flex items-center justify-between gap-3 border-t py-3" style={{ borderColor: theme.soft }}>
-                <span className="text-sm font-semibold">{format}</span>
-                <span className="rounded-full bg-mist px-2.5 py-1 text-xs font-bold text-muted">Not started</span>
-              </li>
-            ))}
+            {current.formats.map((format) => {
+              const { label, status } = formatStatus(current.id, format);
+              const tone = adTone(status);
+              return (
+                <li key={format} className="flex items-center justify-between gap-3 border-t py-3" style={{ borderColor: theme.soft }}>
+                  <span className="text-sm font-semibold">{format}</span>
+                  <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ backgroundColor: tone.bg, color: tone.fg }}>{label}</span>
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <p className="mt-2 text-sm text-muted">
-            {channels.length
-              ? `No ads live yet across ${channels.length} channels. Tap a channel to see its ad formats.`
-              : "No digital channels chosen. Add them with Edit world."}
-          </p>
+          <ul className="mt-1">
+            {[
+              ["Live ads", overview.live ? `${overview.live} live` : "None live", overview.live ? "live" : "not_started"],
+              ["Paused", overview.paused ? `${overview.paused} paused` : "None", overview.paused ? "paused" : "not_started"],
+              ["Issues raised", overview.issues ? `${overview.issues} open` : "None", overview.issues ? "paused" : "not_started"],
+              [
+                "Fund requests",
+                overview.pendingFunds ? `${overview.pendingFunds} pending${overview.lateFunds ? `, ${overview.lateFunds} over 24 h` : ""}` : "None pending",
+                overview.lateFunds ? "late" : overview.pendingFunds ? "paused" : "not_started",
+              ],
+            ].map(([name, label, status]) => {
+              const tone = status === "late" ? { bg: "#FDE7E7", fg: "#A11A1A" } : adTone(status as AdStatus);
+              return (
+                <li key={name} className="flex items-center justify-between gap-3 border-t py-3" style={{ borderColor: theme.soft }}>
+                  <span className="text-sm font-semibold">{name}</span>
+                  <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ backgroundColor: tone.bg, color: tone.fg }}>{label}</span>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
     </>
