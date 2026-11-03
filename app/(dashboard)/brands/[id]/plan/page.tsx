@@ -8,6 +8,7 @@ import { BudgetSpread } from "@/components/budget-spread";
 import { Card, SectionTitle } from "@/components/ui";
 import { deleteBudgetLine } from "./actions";
 import { BudgetLineForm, ImportLinesForm, PlanDocumentsForm } from "./plan-forms";
+import { FileImportForm } from "./file-import";
 
 export const metadata: Metadata = { title: "Media plan · PRIME" };
 
@@ -109,7 +110,10 @@ export default async function PlanPage({ params }: PageProps<"/brands/[id]/plan"
               ))}
             </ul>
           )}
-          <BudgetLineForm brandId={id} channels={budgetChannels(brand.channels, brand.marketing_types)} />
+          <FileImportForm brandId={id} />
+          <div className="mt-4">
+            <BudgetLineForm brandId={id} channels={budgetChannels(brand.channels, brand.marketing_types)} />
+          </div>
           <div className="mt-3">
             <ImportLinesForm brandId={id} />
           </div>

@@ -11,7 +11,8 @@
     "db:configure-auth": "node --env-file=.env.local scripts/configure-auth.mjs",
     "db:make-admin": "node --env-file=.env.local scripts/make-admin.mjs",
     "db:set-password": "node --env-file=.env.local scripts/set-password.mjs",
-    "db:upload-media": "node --env-file=.env.local scripts/upload-brand-media.mjs"
+    "db:upload-media": "node --env-file=.env.local scripts/upload-brand-media.mjs",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -19,6 +20,7 @@
     "next": "16.4.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "read-excel-file": "9.3.10",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
