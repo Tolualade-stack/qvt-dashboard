@@ -12,7 +12,7 @@ import { LiveDot } from "@/components/ui";
 export type WorldStats = {
   posted: number;        // content pieces posted this month
   adsLive: number;
-  reach: string | null;  // last 7 days, already formatted (e.g. "298k"); null until numbers arrive
+  reach: string | null;  // latest uploaded reach, already formatted (e.g. "298k"); null until numbers arrive
 };
 
 export function WorldCard({ brand, stats, flag }: { brand: Brand; stats: WorldStats; flag?: string | null }) {
@@ -24,7 +24,7 @@ export function WorldCard({ brand, stats, flag }: { brand: Brand; stats: WorldSt
   const tiles = [
     { value: stats.posted, suffix: target ? `/${target}` : "", label: "posted" },
     { value: stats.adsLive, suffix: "", label: "ads live" },
-    { value: stats.reach ?? "–", suffix: "", label: "reach · 7d" },
+    { value: stats.reach ?? "–", suffix: "", label: "reach" },
   ];
 
   return (

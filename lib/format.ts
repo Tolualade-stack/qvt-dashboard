@@ -12,6 +12,16 @@ export function formatDateTime(value: string | Date): string {
   }).format(new Date(value));
 }
 
+// A date in Lagos as YYYY-MM-DD, `offsetDays` from today (e.g. -6 for a week ago).
+export function lagosDate(offsetDays = 0, now = Date.now()): string {
+  return new Date(now + 60 * 60 * 1000 + offsetDays * 86_400_000).toISOString().slice(0, 10);
+}
+
+// e.g. "3 Nov"
+export function shortDate(isoDate: string): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${isoDate}T00:00:00Z`));
+}
+
 // e.g. "just now", "40 min ago", "3 h ago", "yesterday", "4 days ago"
 export function timeAgo(value: string | Date): string {
   const minutes = Math.round((Date.now() - new Date(value).getTime()) / 60000);

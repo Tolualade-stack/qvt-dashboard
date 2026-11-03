@@ -6,6 +6,7 @@ import type { Brand, Person } from "@/lib/types";
 import { monthCounts, type ContentItem } from "@/lib/content";
 import { hoursSince, type Ad, type FundRequest } from "@/lib/ads";
 import { REPORT_KIND_LABELS, type Report } from "@/lib/reports";
+import { compact, summarise, type ChannelMetric } from "@/lib/metrics";
 import { LiveDot } from "@/components/ui";
 import { PGlyph } from "@/components/prime-logo";
 import { WorldCard } from "@/components/world-card";
@@ -15,7 +16,7 @@ import { WorldCard } from "@/components/world-card";
 export default async function HomePage() {
   const me = (await getCurrentUser())!;
   const supabase = await createClient();
-  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }, { data: adRows }, { data: fundRows }, { data: overdueRows }] = await Promise.all([
+  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }, { data: adRows }, { data: fundRows }, { data: overdueRows }, { data: metricRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("is_archived", false).order("sort_order"),
     supabase.from("people").select("id, full_name"),
     supabase.from("content_items").select("brand_id, status, planned_date, posted_at, is_archived"),
@@ -24,7 +25,13 @@ export default async function HomePage() {
     supabase.rpc("ensure_reports").then(() =>
       supabase.from("reports").select("brand_id, kind").is("sent_at", null).lt("due_at", new Date().toISOString()),
     ),
+    supabase.from("channel_metrics").select("*"),
   ]);
+  const metrics = (metricRows ?? []) as ChannelMetric[];
+  const reachOf = (brandId: string) => {
+    const reach = summarise(metrics.filter((m) => m.brand_id === brandId), null).values.reach;
+    return reach !== undefined ? compact(reach) : null;
+  };
   const overdueReports = (overdueRows ?? []) as Pick<Report, "brand_id" | "kind">[];
   const content = (contentRows ?? []) as ContentItem[];
   const ads = (adRows ?? []) as Pick<Ad, "brand_id" | "status" | "issue_raised_at">[];
@@ -98,8 +105,7 @@ export default async function HomePage() {
           <WorldCard
             key={brand.id}
             brand={brand}
-            // Reach fills in with live numbers (Phase 3).
-            stats={{ posted: postedThisMonth(brand.id), adsLive: adsLive(brand.id), reach: null }}
+            stats={{ posted: postedThisMonth(brand.id), adsLive: adsLive(brand.id), reach: reachOf(brand.id) }}
             flag={flagFor(brand)}
           />
         ))}

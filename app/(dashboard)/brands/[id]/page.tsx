@@ -10,6 +10,7 @@ import { describeChange, whoDidIt } from "@/lib/history";
 import { CHANNELS, MARKETING_TYPES, labelFor } from "@/lib/campaign";
 import { lagosMonth, monthCounts, type ContentItem } from "@/lib/content";
 import { REPORT_KIND_LABELS, REPORT_TONES, dueDay, reportState, type CreativeAsset, type Report } from "@/lib/reports";
+import { spotsThisMonth, summarise, type ChannelMetric } from "@/lib/metrics";
 import type { UpdateNote } from "@/lib/notes";
 import { hoursSince, spendSummary, type Ad, type FundRequest } from "@/lib/ads";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
@@ -36,6 +37,7 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     { data: fundRows },
     { data: reportRows },
     { data: assetRows },
+    { data: metricData },
   ] = await Promise.all([
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
     supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
@@ -50,7 +52,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
       supabase.from("reports").select("*").eq("brand_id", id).is("sent_at", null).order("due_at").limit(3),
     ),
     supabase.from("creative_assets").select("status, deployed_at").eq("brand_id", id).eq("is_archived", false),
+    supabase.from("channel_metrics").select("*").eq("brand_id", id),
   ]);
+  const metricRows = (metricData ?? []) as ChannelMetric[];
   if (!brandRow) notFound();
 
   const brand = brandRow as Brand;
@@ -127,6 +131,8 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   const assetsDone = ((assetRows ?? []) as Pick<CreativeAsset, "status" | "deployed_at">[]).filter(
     (a) => a.status === "deployed" && a.deployed_at && a.deployed_at >= monthStart,
   ).length;
+
+  const spots = spotsThisMonth(metricRows, lagosMonth().firstDay);
 
   // The next report still to send, for the chip by the logo.
   const nextReport = ((reportRows ?? []) as Report[])[0];
@@ -249,7 +255,32 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         ads={ads.map((a) => ({ channel: a.channel, format: a.format, status: a.status }))}
         spendByChannel={spendByChannel}
         overview={overview}
+        metrics={Object.fromEntries([["all", summarise(metricRows, null)], ...brand.channels.map((c) => [c, summarise(metricRows, c)])])}
       />
+
+      {/* TV and Radio: spots aired this month against the plan. */}
+      {brand.marketing_types.includes("traditional") && (
+        <section className="mt-3.5 grid grid-cols-2 gap-2.5">
+          {(["tv", "radio"] as const).map((ch) => {
+            const aired = spots[ch];
+            const planned = ch === "tv" ? brand.tv_spots_target : brand.radio_spots_target;
+            return (
+              <div key={ch} className="rounded-[18px] p-3.5" style={{ backgroundColor: theme.soft }}>
+                <div className="text-xs text-muted">{ch === "tv" ? "TV" : "Radio"} spots aired</div>
+                <div className="font-display text-[26px] leading-tight font-black" style={{ color: theme.ink }}>
+                  {aired}
+                  {planned ? <span className="text-sm opacity-70"> of {planned}</span> : null}
+                </div>
+                {planned ? (
+                  <div className="mt-1.5 h-1.5 rounded-full bg-white">
+                    <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, (aired / planned) * 100)}%`, backgroundColor: theme.main }} />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {/* Creative assets deployed */}
       <section className="mt-3.5 flex items-center gap-4 rounded-[22px] bg-ink p-5 text-white">

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { AD_STATUS_LABELS, adTone, type AdStatus } from "@/lib/ads";
+import { compact, formatDelta, type MetricField, type MetricSummary } from "@/lib/metrics";
+import { shortDate } from "@/lib/format";
 
 // A world's Performance section: tap a channel to see its headline numbers and
 // its ads by format. Reach, impressions and the rest arrive with live numbers
@@ -12,7 +14,13 @@ type Channel = { id: string; label: string; formats: readonly string[] };
 export type AdSummary = { channel: string; format: string | null; status: AdStatus };
 export type AdsOverview = { live: number; paused: number; issues: number; pendingFunds: number; lateFunds: number };
 
-const METRICS = ["Impressions", "Likes", "Clicks", "Followers gained", "Video views"];
+const METRICS: [MetricField, string][] = [
+  ["impressions", "Impressions"],
+  ["likes", "Likes"],
+  ["clicks", "Clicks"],
+  ["followers_gained", "Followers gained"],
+  ["video_views", "Video views"],
+];
 
 export function WorldPerformance({
   channels,
@@ -20,18 +28,22 @@ export function WorldPerformance({
   ads,
   spendByChannel,
   overview,
+  metrics,
 }: {
   channels: Channel[];
   theme: Theme;
   ads: AdSummary[];
   spendByChannel: Record<string, string | null>; // "all" plus each channel id
   overview: AdsOverview;
+  metrics: Record<string, MetricSummary>;        // "all" plus each channel id
 }) {
   const [selected, setSelected] = useState("all");
   const current = channels.find((c) => c.id === selected);
   const channelName = current?.label ?? "All channels";
   const tabs = [{ id: "all", label: "All" }, ...channels];
   const spend = spendByChannel[selected] ?? null;
+  const numbers = metrics[selected] ?? { values: {}, deltas: {}, asOf: null, by: null };
+  const delta = (field: MetricField) => (numbers.deltas[field] !== undefined ? `${formatDelta(numbers.deltas[field]!)} vs previous` : "");
 
   // For one format: the most important status among its ads (live first).
   const formatStatus = (channel: string, format: string): { label: string; status: AdStatus } => {
@@ -73,13 +85,18 @@ export function WorldPerformance({
             style={{ background: `linear-gradient(140deg, ${theme.main} 0%, ${theme.deep} 100%)`, color: theme.onMain }}
           >
             <div className="text-[13px] font-semibold opacity-85">Reach · {channelName}</div>
-            <div className="font-display text-[46px] leading-tight font-black">–</div>
-            <div className="text-[13px] font-semibold opacity-85">Appears once numbers are uploaded</div>
+            <div className="font-display text-[46px] leading-tight font-black">{numbers.values.reach !== undefined ? compact(numbers.values.reach) : "–"}</div>
+            <div className="text-[13px] font-semibold opacity-85">
+              {numbers.values.reach !== undefined ? delta("reach") || "First upload" : "Appears once numbers are uploaded"}
+            </div>
           </div>
-          {METRICS.map((label) => (
-            <div key={label} className="rounded-[18px] p-3.5" style={{ backgroundColor: theme.soft }}>
+          {METRICS.map(([field, label]) => (
+            <div key={field} className="rounded-[18px] p-3.5" style={{ backgroundColor: theme.soft }}>
               <div className="text-xs text-muted">{label}</div>
-              <div className="font-display text-[26px] leading-tight font-black" style={{ color: theme.ink }}>–</div>
+              <div className="font-display text-[26px] leading-tight font-black" style={{ color: theme.ink }}>
+                {numbers.values[field] !== undefined ? compact(numbers.values[field]!) : "–"}
+              </div>
+              <div className="text-xs font-semibold text-muted">{delta(field)}</div>
             </div>
           ))}
           <div className="rounded-[18px] p-3.5" style={{ backgroundColor: theme.soft }}>
@@ -88,7 +105,9 @@ export function WorldPerformance({
             <div className="text-xs font-semibold text-muted">{spend ? "from the ads tracker" : "no spend logged"}</div>
           </div>
         </div>
-        <p className="mt-2 text-xs text-muted">Reach, impressions and the rest arrive with live numbers in Phase 3.</p>
+        <p className="mt-2 text-xs text-muted">
+          {numbers.asOf ? `Numbers as of ${shortDate(numbers.asOf)} · uploaded by ${numbers.by}` : "No numbers uploaded yet. Add them on the Update screen, under Numbers."}
+        </p>
       </section>
 
       <section className="mt-5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>

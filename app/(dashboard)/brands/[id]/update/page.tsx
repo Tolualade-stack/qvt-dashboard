@@ -15,6 +15,9 @@ import { AdCard } from "../ads/ad-card";
 import { AdForm } from "../ads/ad-form";
 import { AddAssetForm, AddReportForm, AssetCard, ReportCard } from "../reports/cards";
 import type { CreativeAsset, Report } from "@/lib/reports";
+import { METRIC_FIELDS, SOURCE_NAMES, compact, type ChannelMetric } from "@/lib/metrics";
+import { lagosDate, shortDate } from "@/lib/format";
+import { NumbersForm } from "../numbers/numbers-form";
 
 export const metadata: Metadata = { title: "Update · PRIME" };
 
@@ -23,14 +26,17 @@ export const metadata: Metadata = { title: "Update · PRIME" };
 export default async function UpdatePage({ params, searchParams }: PageProps<"/brands/[id]/update">) {
   const { id } = await params;
   const requested = (await searchParams).tab;
-  const tab = requested === "note" || requested === "ads" || requested === "assets" || requested === "reports" ? requested : "content";
+  const tab =
+    requested === "note" || requested === "ads" || requested === "assets" || requested === "reports" || requested === "numbers"
+      ? requested
+      : "content";
   const { brand, theme, platforms, people, canEdit, supabase } = await loadWorld(id);
   const channels = CHANNELS.filter((c) => brand.channels.includes(c.id)).map((c) => ({ id: c.id, label: c.label, formats: c.formats }));
 
   // Make sure the regular reports up to now (and the next one) exist.
   if (tab === "reports") await supabase.rpc("ensure_reports");
 
-  const [{ data: rows }, { data: noteRows }, { data: adRows }, { data: fundRows }, { data: reportRows }, { data: assetRows }] = await Promise.all([
+  const [{ data: rows }, { data: noteRows }, { data: adRows }, { data: fundRows }, { data: reportRows }, { data: assetRows }, { data: metricRows }] = await Promise.all([
     supabase
       .from("content_items")
       .select("*")
@@ -53,7 +59,11 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
     tab === "assets"
       ? supabase.from("creative_assets").select("*").eq("brand_id", id).eq("is_archived", false).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
+    tab === "numbers"
+      ? supabase.from("channel_metrics").select("*").eq("brand_id", id).order("created_at", { ascending: false }).limit(12)
+      : Promise.resolve({ data: [] }),
   ]);
+  const metrics = (metricRows ?? []) as ChannelMetric[];
   const reports = (reportRows ?? []) as Report[];
   const openReports = reports.filter((r) => !r.sent_at);
   const sentReports = reports.filter((r) => r.sent_at).reverse().slice(0, 6);
@@ -95,6 +105,7 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
           ["ads", "Ads", `/brands/${id}/update?tab=ads`],
           ["assets", "Assets", `/brands/${id}/update?tab=assets`],
           ["reports", "Reports", `/brands/${id}/update?tab=reports`],
+          ["numbers", "Numbers", `/brands/${id}/update?tab=numbers`],
           ["note", "Note", `/brands/${id}/update?tab=note`],
         ].map(([key, label, href]) => (
           <Link
@@ -109,7 +120,36 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
         ))}
       </nav>
 
-      {tab === "reports" ? (
+      {tab === "numbers" ? (
+        <>
+          {canEdit ? (
+            <NumbersForm brandId={id} channels={platforms} theme={theme} defaultStart={lagosDate(-6)} defaultEnd={lagosDate(0)} />
+          ) : (
+            <p className="rounded-2xl bg-mist p-4 text-sm text-muted">You can view this world&apos;s numbers, but not add them.</p>
+          )}
+          <section>
+            <h2 className="mb-2 font-display text-xl font-black">Latest uploads</h2>
+            {metrics.length === 0 && <p className="text-sm text-muted">No numbers yet.</p>}
+            <ul className="divide-y divide-line">
+              {metrics.map((m) => (
+                <li key={m.id} className="py-3 text-sm">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-bold">{platformLabel(platforms, [m.channel])}</span>
+                    <span className="text-xs text-muted">
+                      {shortDate(m.period_start)} – {shortDate(m.period_end)} · {m.source === "manual" ? m.author_name : SOURCE_NAMES[m.source]}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-muted">
+                    {m.spots_aired != null
+                      ? `${m.spots_aired} spots aired`
+                      : METRIC_FIELDS.filter(([f]) => m[f] != null).map(([f, label]) => `${label} ${compact(Number(m[f]))}`).join(" · ")}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
+      ) : tab === "reports" ? (
         <>
           <section>
             <h2 className="mb-2 font-display text-xl font-black">Coming up <span className="text-base text-muted">· {openReports.length}</span></h2>
