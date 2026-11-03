@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:migrate": "node --env-file=.env.local scripts/db-migrate.mjs",
     "db:configure-auth": "node --env-file=.env.local scripts/configure-auth.mjs",
-    "db:make-admin": "node --env-file=.env.local scripts/make-admin.mjs"
+    "db:make-admin": "node --env-file=.env.local scripts/make-admin.mjs",
+    "db:set-password": "node --env-file=.env.local scripts/set-password.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
