@@ -10,6 +10,8 @@ import { describeChange, whoDidIt } from "@/lib/history";
 import { CHANNELS, MARKETING_TYPES, channelName, labelFor } from "@/lib/campaign";
 import { allocate, type BudgetLine } from "@/lib/budget";
 import { BudgetSpread } from "@/components/budget-spread";
+import { FlagList } from "@/components/flag-list";
+import { loadFlags } from "@/lib/attention";
 import { lagosMonth, monthCounts, type ContentItem } from "@/lib/content";
 import { REPORT_KIND_LABELS, REPORT_TONES, dueDay, reportState, type CreativeAsset, type Report } from "@/lib/reports";
 import { spotsThisMonth, summarise, type ChannelMetric } from "@/lib/metrics";
@@ -62,6 +64,7 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   if (!brandRow) notFound();
 
   const brand = brandRow as Brand;
+  const flags = (await loadFlags(supabase, [brand])).get(brand.id) ?? [];
   const roles = (roleRows ?? []) as BrandRole[];
   const people = new Map(((peopleRows ?? []) as Person[]).map((p) => [p.id, p]));
   const content = (contentRows ?? []) as ContentItem[];
@@ -262,6 +265,17 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           ))}
         </ul>
       </section>
+
+      {/* Needs attention: anything late here, with who to escalate to. */}
+      {flags.length > 0 && (
+        <section className="mt-6">
+          <div className="mb-2.5 flex items-baseline justify-between gap-2">
+            <h2 className="font-display text-2xl font-black">Needs attention <span className="text-lg text-muted">· {flags.length}</span></h2>
+            {flags.length > 4 && <Link href="/attention" className="text-sm font-bold" style={{ color: theme.ink }}>See all →</Link>}
+          </div>
+          <FlagList flags={flags.slice(0, 4)} />
+        </section>
+      )}
 
       <WorldPerformance
         channels={channels.map((c) => ({ id: c.id, label: c.label, formats: c.formats }))}

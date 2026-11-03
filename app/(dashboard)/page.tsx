@@ -4,9 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { greeting, longDate } from "@/lib/format";
 import type { Brand, Person } from "@/lib/types";
 import { monthCounts, type ContentItem } from "@/lib/content";
-import { hoursSince, type Ad, type FundRequest } from "@/lib/ads";
-import { REPORT_KIND_LABELS, type Report } from "@/lib/reports";
+import type { Ad } from "@/lib/ads";
 import { compact, summarise, type ChannelMetric } from "@/lib/metrics";
+import { loadFlags } from "@/lib/attention";
 import { LiveDot } from "@/components/ui";
 import { PGlyph } from "@/components/prime-logo";
 import { WorldCard } from "@/components/world-card";
@@ -16,42 +16,41 @@ import { WorldCard } from "@/components/world-card";
 export default async function HomePage() {
   const me = (await getCurrentUser())!;
   const supabase = await createClient();
-  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }, { data: adRows }, { data: fundRows }, { data: overdueRows }, { data: metricRows }] = await Promise.all([
+  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }, { data: adRows }, { data: metricRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("is_archived", false).order("sort_order"),
     supabase.from("people").select("id, full_name"),
     supabase.from("content_items").select("brand_id, status, planned_date, posted_at, is_archived"),
-    supabase.from("ads").select("brand_id, status, issue_raised_at").eq("is_archived", false),
-    supabase.from("fund_requests").select("brand_id, requested_at").eq("status", "pending"),
-    supabase.rpc("ensure_reports").then(() =>
-      supabase.from("reports").select("brand_id, kind").is("sent_at", null).lt("due_at", new Date().toISOString()),
-    ),
+    supabase.from("ads").select("brand_id, status").eq("is_archived", false),
     supabase.from("channel_metrics").select("*"),
   ]);
+  const brands = (brandRows ?? []) as Brand[];
+  const nameOf = new Map(((peopleRows ?? []) as Pick<Person, "id" | "full_name">[]).map((p) => [p.id, p.full_name]));
+  const onLeave = brands.filter((b) => b.leave_mode_on).length;
+  const flags = await loadFlags(supabase, brands);
+
   const metrics = (metricRows ?? []) as ChannelMetric[];
   const reachOf = (brandId: string) => {
     const reach = summarise(metrics.filter((m) => m.brand_id === brandId), null).values.reach;
     return reach !== undefined ? compact(reach) : null;
   };
-  const overdueReports = (overdueRows ?? []) as Pick<Report, "brand_id" | "kind">[];
   const content = (contentRows ?? []) as ContentItem[];
-  const ads = (adRows ?? []) as Pick<Ad, "brand_id" | "status" | "issue_raised_at">[];
-  const funds = (fundRows ?? []) as Pick<FundRequest, "brand_id" | "requested_at">[];
+  const ads = (adRows ?? []) as Pick<Ad, "brand_id" | "status">[];
   const postedThisMonth = (brandId: string) => monthCounts(content.filter((c) => c.brand_id === brandId)).posted;
   const adsLive = (brandId: string) => ads.filter((a) => a.brand_id === brandId && a.status === "live").length;
 
-  // The card's warning pill, most urgent first.
+  // What needs attention: the banner, the "need you" chip, and each card's pill.
+  const allFlags = [...flags.values()].flat();
+  const needYou = allFlags.filter((f) => f.severity !== "warning").length;
   const flagFor = (brand: Brand): string | null => {
-    if (funds.some((f) => f.brand_id === brand.id && hoursSince(f.requested_at) > 24)) return "Fund request over 24 h";
-    const late = overdueReports.find((r) => r.brand_id === brand.id);
-    if (late) return `${REPORT_KIND_LABELS[late.kind]} overdue`;
-    const issues = ads.filter((a) => a.brand_id === brand.id && a.issue_raised_at).length;
-    if (issues) return `${issues} ad ${issues === 1 ? "issue" : "issues"} open`;
+    const list = flags.get(brand.id) ?? [];
+    const toEscalate = list.filter((f) => f.severity === "critical").length;
+    const overdue = list.filter((f) => f.severity === "overdue").length;
+    if (toEscalate) return `${toEscalate} to escalate`;
+    if (overdue) return `${overdue} overdue`;
+    if (list.length) return list[0].title.length > 26 ? `${list.length} heads up` : list[0].title;
     if (brand.leave_mode_on) return `Leave Mode: ${nameOf.get(brand.leave_cover_person_id ?? "") ?? "cover"}`;
     return null;
   };
-  const brands = (brandRows ?? []) as Brand[];
-  const nameOf = new Map(((peopleRows ?? []) as Pick<Person, "id" | "full_name">[]).map((p) => [p.id, p.full_name]));
-  const onLeave = brands.filter((b) => b.leave_mode_on).length;
 
   return (
     <div className="space-y-5">
@@ -64,9 +63,34 @@ export default async function HomePage() {
           <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-semibold">
             <LiveDot /> {brands.length} worlds live
           </span>
-          {onLeave > 0 && <span className="rounded-full bg-ink px-3 py-1.5 text-sm font-semibold text-white">Leave Mode on · {onLeave}</span>}
+          {needYou > 0 && (
+            <Link href="/attention" className="rounded-full bg-ink px-3 py-1.5 text-sm font-semibold text-white">
+              {needYou} need you
+            </Link>
+          )}
+          {onLeave > 0 && <span className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold">Leave Mode on · {onLeave}</span>}
         </div>
       </section>
+
+      {allFlags.length > 0 && (
+        <Link href="/attention" className="flex items-center gap-3 rounded-[20px] bg-[#FFF1E0] p-4 text-[#7A3E00] transition hover:brightness-95">
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M12 3 2 21h20L12 3z" /><path d="M12 10v4" /><path d="M12 17.5v.5" />
+          </svg>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-bold">
+              {allFlags.length} {allFlags.length === 1 ? "item needs" : "items need"} attention
+            </span>
+            <span className="block text-[13px] opacity-90">
+              {brands
+                .filter((b) => (flags.get(b.id) ?? []).length)
+                .map((b) => `${(flags.get(b.id) ?? []).length} on ${b.name}`)
+                .join(" · ")}
+            </span>
+          </span>
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
+        </Link>
+      )}
 
       {me.role === "admin" && (
         <Link
