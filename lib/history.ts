@@ -40,7 +40,7 @@ const IGNORED_FIELDS = new Set([
   "created_at", "created_by", "updated_at", "updated_by",
   // Set automatically alongside a status change.
   "status_changed_at", "copy_ready_at", "posted_at", "revision_round",
-  "went_live_at", "ended_at", "spend_updated_at", "issue_note", "resolved_at", "requested_at",
+  "went_live_at", "ended_at", "spend_updated_at", "issue_note", "resolved_at", "requested_at", "deployed_at",
 ]);
 
 function changedFields(entry: AuditEntry): string[] {
@@ -72,6 +72,19 @@ export function describeChange(entry: AuditEntry): string {
       return entry.new_data?.canva_calendar_url
         ? `set the Canva calendar link for ${label}`
         : `removed the Canva calendar link for ${label}`;
+    }
+  }
+
+  if (entry.table_name === "reports") {
+    const what = `the ${String(row.kind === "biweekly" ? "bi-weekly" : row.kind)} report (${row.period_label})`;
+    if (changedFields(entry).includes("sent_at")) return entry.new_data?.sent_at ? `sent ${what}` : `marked ${what} as not sent`;
+    if (changedFields(entry).includes("link")) return `added the link for ${what}`;
+  }
+
+  if (entry.table_name === "creative_assets") {
+    if (entry.action === "insert") return `added the creative asset "${label}"`;
+    if (changedFields(entry).includes("status")) {
+      return `marked "${label}" as ${String(entry.new_data?.status).replace("in_production", "in production")}`;
     }
   }
 

@@ -5,6 +5,7 @@ import { greeting, longDate } from "@/lib/format";
 import type { Brand, Person } from "@/lib/types";
 import { monthCounts, type ContentItem } from "@/lib/content";
 import { hoursSince, type Ad, type FundRequest } from "@/lib/ads";
+import { REPORT_KIND_LABELS, type Report } from "@/lib/reports";
 import { LiveDot } from "@/components/ui";
 import { PGlyph } from "@/components/prime-logo";
 import { WorldCard } from "@/components/world-card";
@@ -14,13 +15,17 @@ import { WorldCard } from "@/components/world-card";
 export default async function HomePage() {
   const me = (await getCurrentUser())!;
   const supabase = await createClient();
-  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }, { data: adRows }, { data: fundRows }] = await Promise.all([
+  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }, { data: adRows }, { data: fundRows }, { data: overdueRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("is_archived", false).order("sort_order"),
     supabase.from("people").select("id, full_name"),
     supabase.from("content_items").select("brand_id, status, planned_date, posted_at, is_archived"),
     supabase.from("ads").select("brand_id, status, issue_raised_at").eq("is_archived", false),
     supabase.from("fund_requests").select("brand_id, requested_at").eq("status", "pending"),
+    supabase.rpc("ensure_reports").then(() =>
+      supabase.from("reports").select("brand_id, kind").is("sent_at", null).lt("due_at", new Date().toISOString()),
+    ),
   ]);
+  const overdueReports = (overdueRows ?? []) as Pick<Report, "brand_id" | "kind">[];
   const content = (contentRows ?? []) as ContentItem[];
   const ads = (adRows ?? []) as Pick<Ad, "brand_id" | "status" | "issue_raised_at">[];
   const funds = (fundRows ?? []) as Pick<FundRequest, "brand_id" | "requested_at">[];
@@ -30,6 +35,8 @@ export default async function HomePage() {
   // The card's warning pill, most urgent first.
   const flagFor = (brand: Brand): string | null => {
     if (funds.some((f) => f.brand_id === brand.id && hoursSince(f.requested_at) > 24)) return "Fund request over 24 h";
+    const late = overdueReports.find((r) => r.brand_id === brand.id);
+    if (late) return `${REPORT_KIND_LABELS[late.kind]} overdue`;
     const issues = ads.filter((a) => a.brand_id === brand.id && a.issue_raised_at).length;
     if (issues) return `${issues} ad ${issues === 1 ? "issue" : "issues"} open`;
     if (brand.leave_mode_on) return `Leave Mode: ${nameOf.get(brand.leave_cover_person_id ?? "") ?? "cover"}`;

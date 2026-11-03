@@ -13,6 +13,8 @@ import type { Ad, FundRequest } from "@/lib/ads";
 import { CHANNELS } from "@/lib/campaign";
 import { AdCard } from "../ads/ad-card";
 import { AdForm } from "../ads/ad-form";
+import { AddAssetForm, AddReportForm, AssetCard, ReportCard } from "../reports/cards";
+import type { CreativeAsset, Report } from "@/lib/reports";
 
 export const metadata: Metadata = { title: "Update · PRIME" };
 
@@ -21,11 +23,14 @@ export const metadata: Metadata = { title: "Update · PRIME" };
 export default async function UpdatePage({ params, searchParams }: PageProps<"/brands/[id]/update">) {
   const { id } = await params;
   const requested = (await searchParams).tab;
-  const tab = requested === "note" || requested === "ads" ? requested : "content";
+  const tab = requested === "note" || requested === "ads" || requested === "assets" || requested === "reports" ? requested : "content";
   const { brand, theme, platforms, people, canEdit, supabase } = await loadWorld(id);
   const channels = CHANNELS.filter((c) => brand.channels.includes(c.id)).map((c) => ({ id: c.id, label: c.label, formats: c.formats }));
 
-  const [{ data: rows }, { data: noteRows }, { data: adRows }, { data: fundRows }] = await Promise.all([
+  // Make sure the regular reports up to now (and the next one) exist.
+  if (tab === "reports") await supabase.rpc("ensure_reports");
+
+  const [{ data: rows }, { data: noteRows }, { data: adRows }, { data: fundRows }, { data: reportRows }, { data: assetRows }] = await Promise.all([
     supabase
       .from("content_items")
       .select("*")
@@ -42,7 +47,18 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
     tab === "ads"
       ? supabase.from("fund_requests").select("*").eq("brand_id", id).eq("status", "pending").order("requested_at")
       : Promise.resolve({ data: [] }),
+    tab === "reports"
+      ? supabase.from("reports").select("*").eq("brand_id", id).order("due_at")
+      : Promise.resolve({ data: [] }),
+    tab === "assets"
+      ? supabase.from("creative_assets").select("*").eq("brand_id", id).eq("is_archived", false).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
   ]);
+  const reports = (reportRows ?? []) as Report[];
+  const openReports = reports.filter((r) => !r.sent_at);
+  const sentReports = reports.filter((r) => r.sent_at).reverse().slice(0, 6);
+  const assets = (assetRows ?? []) as CreativeAsset[];
+  const deployedThisMonth = assets.filter((a) => a.status === "deployed" && a.deployed_at && a.deployed_at >= lagosMonth().startIso).length;
   const items = (rows ?? []) as ContentItem[];
   const notes = (noteRows ?? []) as UpdateNote[];
   const ads = (adRows ?? []) as Ad[];
@@ -73,27 +89,61 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
         </div>
       </header>
 
-      <nav aria-label="Update type" className="grid grid-cols-4 gap-1 rounded-2xl bg-mist p-1">
+      <nav aria-label="Update type" className="-mx-5 flex gap-1.5 overflow-x-auto px-5 pb-1">
         {[
           ["content", "Content", `/brands/${id}/update`],
           ["ads", "Ads", `/brands/${id}/update?tab=ads`],
+          ["assets", "Assets", `/brands/${id}/update?tab=assets`],
+          ["reports", "Reports", `/brands/${id}/update?tab=reports`],
           ["note", "Note", `/brands/${id}/update?tab=note`],
         ].map(([key, label, href]) => (
           <Link
             key={key}
             href={href}
             aria-current={tab === key ? "page" : undefined}
-            className={`flex min-h-10 items-center justify-center rounded-xl text-sm ${tab === key ? "bg-white font-bold shadow-sm" : "font-semibold text-muted"}`}
+            className="flex min-h-11 shrink-0 items-center rounded-full px-5 text-sm font-bold"
+            style={tab === key ? { backgroundColor: theme.main, color: theme.onMain } : { backgroundColor: theme.soft, color: theme.ink }}
           >
             {label}
           </Link>
         ))}
-        <span className="flex min-h-10 flex-col items-center justify-center rounded-xl text-sm font-semibold text-muted">
-          Numbers <span className="text-[10px] font-medium">Phase 3</span>
-        </span>
       </nav>
 
-      {tab === "ads" ? (
+      {tab === "reports" ? (
+        <>
+          <section>
+            <h2 className="mb-2 font-display text-xl font-black">Coming up <span className="text-base text-muted">· {openReports.length}</span></h2>
+            <p className="mb-3 text-sm text-muted">{brand.reporting}. Regular reports appear here by themselves.</p>
+            {openReports.length === 0 && <p className="text-sm text-muted">Nothing due. All reports are sent.</p>}
+            <div className="space-y-3">
+              {openReports.map((r) => <ReportCard key={r.id} report={r} theme={theme} canEdit={canEdit} />)}
+            </div>
+          </section>
+          {canEdit && <AddReportForm brandId={id} />}
+          {sentReports.length > 0 && (
+            <section>
+              <h2 className="mb-2 font-display text-xl font-black">Sent</h2>
+              <div className="space-y-3">
+                {sentReports.map((r) => <ReportCard key={r.id} report={r} theme={theme} canEdit={canEdit} />)}
+              </div>
+            </section>
+          )}
+        </>
+      ) : tab === "assets" ? (
+        <>
+          <p className="rounded-2xl p-4 text-sm font-semibold" style={{ backgroundColor: theme.soft, color: theme.ink }}>
+            {deployedThisMonth} of {brand.creative_assets_target ?? "–"} creative assets deployed this month
+            {brand.creative_assets_target ? "" : " (set a target with Edit world)"}
+          </p>
+          {canEdit && <AddAssetForm brandId={id} people={people} />}
+          <div className="space-y-3">
+            {assets.length === 0 && <p className="text-sm text-muted">No assets yet. Add each one as production starts.</p>}
+            {assets.map((a) => (
+              <AssetCard key={a.id} asset={a} theme={theme} ownerName={a.owner_person_id ? (nameOf.get(a.owner_person_id) ?? null) : null} canEdit={canEdit} />
+            ))}
+          </div>
+        </>
+      ) : tab === "ads" ? (
         <>
           {canEdit ? (
             <AdForm brandId={id} channels={channels} people={people} />

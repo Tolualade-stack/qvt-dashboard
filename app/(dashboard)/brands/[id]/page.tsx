@@ -8,7 +8,8 @@ import { tint, worldTheme } from "@/lib/colour";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { describeChange, whoDidIt } from "@/lib/history";
 import { CHANNELS, MARKETING_TYPES, labelFor } from "@/lib/campaign";
-import { monthCounts, type ContentItem } from "@/lib/content";
+import { lagosMonth, monthCounts, type ContentItem } from "@/lib/content";
+import { REPORT_KIND_LABELS, REPORT_TONES, dueDay, reportState, type CreativeAsset, type Report } from "@/lib/reports";
 import type { UpdateNote } from "@/lib/notes";
 import { hoursSince, spendSummary, type Ad, type FundRequest } from "@/lib/ads";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
@@ -33,6 +34,8 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     { data: noteRows },
     { data: adRows },
     { data: fundRows },
+    { data: reportRows },
+    { data: assetRows },
   ] = await Promise.all([
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
     supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
@@ -42,6 +45,11 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     supabase.from("update_notes").select("*").eq("brand_id", id).order("created_at", { ascending: false }).limit(8),
     supabase.from("ads").select("*").eq("brand_id", id).eq("is_archived", false),
     supabase.from("fund_requests").select("*").eq("brand_id", id).eq("status", "pending"),
+    // Fill in the regular report schedule first, then read the reports still to send.
+    supabase.rpc("ensure_reports").then(() =>
+      supabase.from("reports").select("*").eq("brand_id", id).is("sent_at", null).order("due_at").limit(3),
+    ),
+    supabase.from("creative_assets").select("status, deployed_at").eq("brand_id", id).eq("is_archived", false),
   ]);
   if (!brandRow) notFound();
 
@@ -114,8 +122,15 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     me.role === "updates_manager" ||
     (me.role === "leave_cover" && brand.leave_mode_on && brand.leave_cover_person_id === me.personId);
 
-  // Creative assets ring: 0 deployed until the asset tracker (Phase 2c) counts them.
-  const assetsDone = 0;
+  // Creative assets ring: assets deployed this month against the target.
+  const monthStart = lagosMonth().startIso;
+  const assetsDone = ((assetRows ?? []) as Pick<CreativeAsset, "status" | "deployed_at">[]).filter(
+    (a) => a.status === "deployed" && a.deployed_at && a.deployed_at >= monthStart,
+  ).length;
+
+  // The next report still to send, for the chip by the logo.
+  const nextReport = ((reportRows ?? []) as Report[])[0];
+  const nextReportState = nextReport ? reportState(nextReport) : null;
   const assetsTarget = brand.creative_assets_target;
   const ringOffset = Math.round(264 * (1 - (assetsTarget ? assetsDone / assetsTarget : 0)));
   const contentTarget =
@@ -177,7 +192,21 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
             {brand.leave_mode_on && (
               <span className="rounded-full bg-[#FFF1D6] px-2.5 py-1 text-xs font-bold text-[#8A3B00]">Leave Mode: {coverName} can edit</span>
             )}
-            <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ backgroundColor: theme.soft, color: theme.ink }}>{brand.reporting}</span>
+            {nextReport ? (
+              <Link
+                href={`/brands/${brand.id}/update?tab=reports`}
+                className="rounded-full px-2.5 py-1 text-xs font-bold"
+                style={
+                  nextReportState === "overdue" || nextReportState === "due_soon"
+                    ? { backgroundColor: REPORT_TONES[nextReportState].bg, color: REPORT_TONES[nextReportState].fg }
+                    : { backgroundColor: theme.soft, color: theme.ink }
+                }
+              >
+                {REPORT_KIND_LABELS[nextReport.kind]} {nextReportState === "overdue" ? "overdue" : `due ${dueDay(nextReport.due_at)}`}
+              </Link>
+            ) : (
+              <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ backgroundColor: theme.soft, color: theme.ink }}>{brand.reporting}</span>
+            )}
             {me.role === "admin" && (
               <Link href={`/brands/${brand.id}/edit`} className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-xs font-bold text-white">
                 <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" /></svg>
@@ -235,7 +264,7 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           <div className="font-display text-xl font-black">Creative assets deployed</div>
           <div className="mt-1 text-[13px] text-white/75">
             {channels.length ? `Each asset runs on all ${channels.length} channels. ` : ""}
-            {assetsTarget ? "The asset tracker counts them as they go live." : "Set a target with Edit world."}
+            {assetsTarget ? "Deployed this month. Mark assets as deployed on the Update screen." : "Set a target with Edit world."}
           </div>
         </div>
       </section>
