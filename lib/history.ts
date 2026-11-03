@@ -5,6 +5,19 @@ import type { AuditEntry } from "@/lib/types";
 
 const FIELD_LABELS: Record<string, string> = {
   canva_calendar_url: "Canva calendar link",
+  banner_path: "banner",
+  logo_path: "logo",
+  colour: "main colour",
+  palette: "logo colours",
+  marketing_types: "marketing types",
+  channels: "channels",
+  about: "about",
+  products: "products",
+  sort_order: "order on Home",
+  is_archived: "archived",
+  monthly_content_target_min: "content target",
+  monthly_content_target_max: "content target",
+  creative_assets_target: "creative assets target",
   leave_mode_on: "Leave Mode",
   leave_cover_person_id: "leave cover person",
   app_role: "role",
@@ -23,6 +36,11 @@ function changedFields(entry: AuditEntry): string[] {
   return Object.keys(after).filter(
     (key) => !IGNORED_FIELDS.has(key) && JSON.stringify(before[key]) !== JSON.stringify(after[key]),
   );
+}
+
+// Who made the change. Changes made by setup scripts (no login) read "PRIME setup".
+export function whoDidIt(entry: AuditEntry): string {
+  return entry.changed_by_name === "System" ? "PRIME setup" : entry.changed_by_name;
 }
 
 export function describeChange(entry: AuditEntry): string {
@@ -54,6 +72,7 @@ export function describeChange(entry: AuditEntry): string {
   }
 
   const verb = { insert: "added", update: "updated", delete: "removed" }[entry.action];
-  const fields = entry.action === "update" ? changedFields(entry).map((f) => FIELD_LABELS[f] ?? f.replaceAll("_", " ")) : [];
+  const fields =
+    entry.action === "update" ? [...new Set(changedFields(entry).map((f) => FIELD_LABELS[f] ?? f.replaceAll("_", " ")))] : [];
   return `${verb} ${label || entry.table_name}${fields.length ? ` (${fields.join(", ")})` : ""}`;
 }

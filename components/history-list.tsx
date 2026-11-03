@@ -1,4 +1,4 @@
-import { describeChange } from "@/lib/history";
+import { describeChange, whoDidIt } from "@/lib/history";
 import { formatDateTime } from "@/lib/format";
 import type { AuditEntry } from "@/lib/types";
 
@@ -11,7 +11,7 @@ export function HistoryList({ entries }: { entries: AuditEntry[] }) {
     <ul className="divide-y divide-line">
       {entries.map((entry) => (
         <li key={entry.id} className="py-2 text-sm">
-          <span className="font-medium">{entry.changed_by_name}</span> {describeChange(entry)}
+          <span className="font-medium">{whoDidIt(entry)}</span> {describeChange(entry)}
           <span className="block text-xs text-muted">{formatDateTime(entry.changed_at)}</span>
         </li>
       ))}

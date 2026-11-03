@@ -2,15 +2,21 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { mediaUrl } from "@/lib/media";
 import { tint, worldTheme } from "@/lib/colour";
-import { getCurrentUser } from "@/lib/auth";
+import { formatDateTime, timeAgo } from "@/lib/format";
+import { describeChange, whoDidIt } from "@/lib/history";
+import { CHANNELS, MARKETING_TYPES, labelFor } from "@/lib/campaign";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
-import { Badge, Card, SectionTitle } from "@/components/ui";
-import { HistoryList } from "@/components/history-list";
+import { Badge, LiveDot } from "@/components/ui";
+import { WorldPerformance } from "@/components/world-performance";
 import { CanvaLinkForm } from "./canva-link-form";
 
-export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
+// A brand's world, laid out like the PRIME mock-up: banner hero, logo and
+// profile, performance, creative assets, content progress and the latest updates.
+// Numbers start at zero or "–" and fill in as the trackers and live numbers arrive.
+export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
   const me = (await getCurrentUser())!;
@@ -19,20 +25,34 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
     supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
     supabase.from("people").select("id, slug, full_name, is_placeholder"),
-    supabase
-      .from("audit_log")
-      .select("*")
-      .eq("table_name", "brands")
-      .eq("row_id", id)
-      .order("changed_at", { ascending: false })
-      .limit(10),
+    supabase.from("audit_log").select("*").eq("table_name", "brands").eq("row_id", id).order("changed_at", { ascending: false }).limit(8),
   ]);
   if (!brandRow) notFound();
 
   const brand = brandRow as Brand;
   const roles = (roleRows ?? []) as BrandRole[];
   const people = new Map(((peopleRows ?? []) as Person[]).map((p) => [p.id, p]));
+  const history = (historyRows ?? []) as AuditEntry[];
   const coverName = people.get(brand.leave_cover_person_id ?? "")?.full_name;
+
+  const theme = worldTheme(brand.colour);
+  const dots = [0, 1, 2].map((i) => brand.palette[i] ?? tint(brand.colour, i * 0.3));
+  const banner = mediaUrl(brand.banner_path);
+  const logo = mediaUrl(brand.logo_path);
+  const channels = brand.channels.map((cid) => CHANNELS.find((c) => c.id === cid)).filter((c) => !!c);
+
+  // "Live · updated 40 min ago by Viche": the most recent recorded change.
+  const lastChange = history[0];
+  const updatedWhen = timeAgo(lastChange?.changed_at ?? brand.updated_at);
+  const updatedBy = lastChange && lastChange.changed_by_name !== "System" ? ` by ${lastChange.changed_by_name}` : "";
+
+  const subtitle = [
+    TIER_LABELS[brand.tier].replace(" process", ""),
+    ...brand.marketing_types.map((t) => labelFor(MARKETING_TYPES, t)),
+    channels.map((c) => c.label).join(", "),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   // Group the jobs by person, in the order of their first job on this brand.
   const team = new Map<string, BrandRole[]>();
@@ -44,22 +64,21 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
     me.role === "updates_manager" ||
     (me.role === "leave_cover" && brand.leave_mode_on && brand.leave_cover_person_id === me.personId);
 
-  // The world's colours, from the logo: the main colour and its shades, and up to
-  // three logo colours for the profile dots.
-  const theme = worldTheme(brand.colour);
-  const dots = [0, 1, 2].map((i) => brand.palette[i] ?? tint(brand.colour, i * 0.3));
-  const banner = mediaUrl(brand.banner_path);
-  const logo = mediaUrl(brand.logo_path);
-
-  const target =
+  // Creative assets ring: 0 deployed until the asset tracker (Phase 2c) counts them.
+  const assetsDone = 0;
+  const assetsTarget = brand.creative_assets_target;
+  const ringOffset = Math.round(264 * (1 - (assetsTarget ? assetsDone / assetsTarget : 0)));
+  const contentTarget =
     brand.monthly_content_target_min != null
-      ? `${brand.monthly_content_target_min}–${brand.monthly_content_target_max} pieces a month`
-      : "No monthly target yet";
+      ? brand.monthly_content_target_min === brand.monthly_content_target_max
+        ? `${brand.monthly_content_target_min}`
+        : `${brand.monthly_content_target_min}–${brand.monthly_content_target_max}`
+      : null;
 
   return (
     <>
-      {/* Hero: the brand's banner photo fading into its own deep colour. */}
-      <section className="relative -mx-5 -mt-4 h-[340px] overflow-hidden text-white sm:mx-0 sm:mt-0 sm:rounded-[30px]" style={{ backgroundColor: theme.deep }}>
+      {/* Hero: the banner photo fading into the brand's deep colour. */}
+      <section className="relative -mx-5 -mt-4 h-[340px] overflow-hidden text-white sm:mx-0 sm:mt-0 sm:rounded-t-[30px]" style={{ backgroundColor: theme.deep }}>
         {banner ? (
           <Image src={banner} alt="" fill priority sizes="(max-width: 768px) 100vw, 768px" className="prime-hero-zoom object-cover object-[center_30%]" />
         ) : (
@@ -68,136 +87,180 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
         <div
           aria-hidden="true"
           className="absolute inset-0"
-          style={{ background: `linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 30%, ${theme.deep}bf 70%, ${theme.deep} 100%)` }}
+          style={{ background: `linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 25%, ${theme.deep}a6 50%, ${theme.deep}eb 68%, ${theme.deep} 100%)` }}
         />
-        {me.role === "admin" && (
-          <Link
-            href={`/brands/${brand.id}/edit`}
-            className="absolute top-4 right-4 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-black/50 px-4 text-sm font-semibold text-white backdrop-blur hover:bg-black/65"
-          >
-            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" /></svg>
-            Edit world
+        <div className="relative flex items-center justify-between gap-3 px-5 pt-4">
+          <Link href="/" aria-label="Back to your worlds" className="flex size-[42px] items-center justify-center rounded-[14px] bg-black/45 text-white">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m15 6-6 6 6 6" /></svg>
           </Link>
-        )}
-        <div className="absolute inset-x-5 bottom-7">
-          <div className="prime-fade-up text-xs font-bold tracking-[0.25em] text-white/85">WELCOME TO THE WORLD OF</div>
-          <h1 className="prime-fade-up mt-1 font-display text-5xl leading-[0.95] font-black tracking-tight" style={{ animationDelay: "0.15s" }}>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 text-xs font-semibold">
+            <LiveDot colour="#4ADE80" /> Live · updated {updatedWhen}{updatedBy}
+          </span>
+        </div>
+        <div className="absolute inset-x-5 bottom-[26px]">
+          <div className="prime-fade-up text-xs font-bold tracking-[0.25em]">WELCOME TO THE WORLD OF</div>
+          <h1 className="prime-fade-up mt-0.5 font-display text-[50px] leading-[0.95] font-black tracking-tight" style={{ animationDelay: "0.15s" }}>
             {brand.name}
           </h1>
-          <p className="prime-fade-up mt-2 text-sm text-white/85" style={{ animationDelay: "0.3s" }}>{brand.scope}</p>
+          <p className="prime-fade-up mt-1.5 text-[13px] text-white/85" style={{ animationDelay: "0.3s" }}>{subtitle}</p>
         </div>
       </section>
 
-      {/* Brand profile, with the logo overlapping the hero's edge. */}
-      <section aria-label="Brand profile" className="relative mb-5 px-1">
-        <span
-          className="relative -mt-10 ml-4 flex size-20 items-center justify-center overflow-hidden rounded-full bg-white font-display text-3xl font-black shadow-lg ring-4 ring-white"
-          style={{ color: theme.ink }}
-        >
-          {logo ? <Image src={logo} alt={`${brand.name} logo`} fill sizes="80px" className="object-contain p-1.5" /> : brand.name.slice(0, 1)}
-        </span>
-        {brand.about && <p className="mt-4 text-[15px] leading-relaxed text-ink">{brand.about}</p>}
-        {brand.website && (
-          <a
-            href={brand.website}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-flex min-h-9 items-center gap-1.5 text-sm font-bold"
+      {/* The deep colour runs on behind the logo, which overlaps the hero's edge. */}
+      <div className="relative -mx-5 px-5 sm:mx-0" style={{ background: `linear-gradient(180deg, ${theme.deep} 0px, ${theme.deep} 40px, transparent 40px)` }}>
+        <div className="flex items-center gap-3.5">
+          <span
+            className="relative flex size-[76px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-white font-display text-3xl font-black shadow-[0_10px_24px_rgba(0,0,0,0.25)]"
             style={{ color: theme.ink }}
           >
+            {logo ? <Image src={logo} alt={`${brand.name} logo`} fill sizes="76px" className="object-contain p-1" /> : brand.name.slice(0, 1)}
+          </span>
+          <div className="mt-9 flex flex-wrap gap-1.5">
+            {brand.leave_mode_on && (
+              <span className="rounded-full bg-[#FFF1D6] px-2.5 py-1 text-xs font-bold text-[#8A3B00]">Leave Mode: {coverName} can edit</span>
+            )}
+            <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ backgroundColor: theme.soft, color: theme.ink }}>{brand.reporting}</span>
+            {me.role === "admin" && (
+              <Link href={`/brands/${brand.id}/edit`} className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-xs font-bold text-white">
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" /></svg>
+                Edit world
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Brand profile */}
+      <section aria-label="Brand profile" className="mt-4">
+        {brand.about && <p className="text-[15px] leading-relaxed text-[#2B1A18]">{brand.about}</p>}
+        {brand.website && (
+          <a href={brand.website} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-8 items-center gap-1.5 text-sm font-bold" style={{ color: theme.ink }}>
             {brand.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
             <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
           </a>
         )}
-        {(brand.industry || brand.category || brand.products.length > 0) && (
-          <ul className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-4">
-            {[
-              ["Industry", brand.industry],
-              ["Category", brand.category],
-              ["Products", brand.products.join(" · ")],
-            ].map(([label, value], i) => (
-              <li key={label}>
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
-                  <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: dots[i] }} />
-                  {label}
-                </span>
-                <span className="mt-1 block text-sm font-bold">{value || "Not set"}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="mt-3 grid grid-cols-3 gap-2.5 border-t pt-3.5" style={{ borderColor: theme.soft }}>
+          {[
+            ["Industry", brand.industry],
+            ["Category", brand.category],
+            ["Products", brand.products.join(" · ")],
+          ].map(([label, value], i) => (
+            <li key={label}>
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
+                <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: dots[i] }} />
+                {label}
+              </span>
+              <span className="mt-1 block text-sm font-bold">{value || "Not set"}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <div className="space-y-4">
-        <Card>
-          <div className="flex flex-wrap gap-2">
-            <Badge>{TIER_LABELS[brand.tier]}</Badge>
-            {brand.leave_mode_on ? (
-              <Badge tone="amber">Leave Mode on: {coverName} can edit</Badge>
-            ) : (
-              <Badge>Leave cover: {coverName ?? "not set"}</Badge>
-            )}
+      <WorldPerformance channels={channels.map((c) => ({ id: c.id, label: c.label, formats: c.formats }))} theme={theme} />
+
+      {/* Creative assets deployed */}
+      <section className="mt-3.5 flex items-center gap-4 rounded-[22px] bg-ink p-5 text-white">
+        <svg role="img" aria-label={`${assetsDone} of ${assetsTarget ?? "no target"} creative assets deployed`} width="96" height="96" viewBox="0 0 100 100" className="shrink-0">
+          <circle cx="50" cy="50" r="42" fill="none" stroke={darkTrack(theme.main)} strokeWidth="12" />
+          <circle cx="50" cy="50" r="42" fill="none" stroke={dots[2]} strokeWidth="12" strokeLinecap="round" strokeDasharray="264" strokeDashoffset={ringOffset} transform="rotate(-90 50 50)" />
+          <text x="50" y="57" textAnchor="middle" fill="#FFFFFF" fontWeight="900" fontSize="22" className="font-display">
+            {assetsDone}/{assetsTarget ?? "–"}
+          </text>
+        </svg>
+        <div>
+          <div className="font-display text-xl font-black">Creative assets deployed</div>
+          <div className="mt-1 text-[13px] text-white/75">
+            {channels.length ? `Each asset runs on all ${channels.length} channels. ` : ""}
+            {assetsTarget ? "The asset tracker counts them as they go live." : "Set a target with Edit world."}
           </div>
-          <dl className="mt-3 space-y-1 text-sm">
-            <div className="flex justify-between gap-2">
-              <dt className="text-muted">Reporting</dt>
-              <dd className="text-right">{brand.reporting}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-muted">Content target</dt>
-              <dd className="text-right">{target}</dd>
-            </div>
-          </dl>
-        </Card>
+        </div>
+      </section>
 
-        <Card>
-          <SectionTitle>Monthly Canva content calendar</SectionTitle>
-          {brand.canva_calendar_url ? (
-            <a
-              href={brand.canva_calendar_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="break-all text-sm font-medium text-live underline"
-            >
-              Open this month&apos;s calendar in Canva
-            </a>
-          ) : (
-            <p className="text-sm text-muted">No calendar linked yet.</p>
-          )}
-          {canEdit && <CanvaLinkForm brandId={brand.id} currentUrl={brand.canva_calendar_url ?? ""} />}
-        </Card>
+      {/* Content this month */}
+      <section className="mt-3.5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-base font-bold">Content this month</h2>
+          <span className="font-display text-lg font-black" style={{ color: theme.ink }}>{contentTarget ? `0 of ${contentTarget}` : "No target"}</span>
+        </div>
+        <div aria-hidden="true" className="mt-3 h-3.5 rounded-full" style={{ backgroundColor: theme.soft }} />
+        <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+          {[
+            ["posted", dots[0]],
+            ["scheduled", dots[1]],
+            ["awaiting approval", dots[2]],
+          ].map(([label, colour]) => (
+            <span key={label} className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: colour }} />0 {label}
+            </span>
+          ))}
+        </div>
+      </section>
 
-        <Card>
-          <SectionTitle>Team</SectionTitle>
-          <ul className="divide-y divide-line">
-            {[...team.entries()].map(([personId, jobs]) => {
-              const person = people.get(personId);
-              return (
-                <li key={personId} className="py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{person?.full_name}</span>
-                    {person?.is_placeholder && <Badge>Supporting role</Badge>}
+      {/* Latest in this world */}
+      <section className="mt-5">
+        <h2 className="mb-1.5 font-display text-[22px] font-black">Latest in this world</h2>
+        {history.length === 0 && <p className="text-sm text-muted">Nothing recorded yet.</p>}
+        <ul>
+          {history.map((entry) => (
+            <li key={entry.id} className="flex gap-3 border-t py-3" style={{ borderColor: theme.soft }}>
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl font-display font-black" style={{ backgroundColor: theme.soft, color: theme.ink }}>
+                {whoDidIt(entry).slice(0, 1)}
+              </span>
+              <div>
+                <div className="text-sm">
+                  <b>{whoDidIt(entry)}</b> {describeChange(entry)}
+                </div>
+                <div className="text-xs text-muted">{formatDateTime(entry.changed_at)}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* Team & roles */}
+      <section className="mt-5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
+        <h2 className="mb-1 text-base font-bold">Team &amp; roles</h2>
+        <ul>
+          {[...team.entries()].map(([personId, jobs]) => {
+            const person = people.get(personId);
+            return (
+              <li key={personId} className="flex gap-3 border-t py-3" style={{ borderColor: theme.soft }}>
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-mist font-display text-sm font-black">{person?.full_name.slice(0, 1)}</span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 text-sm font-bold">
+                    {person?.full_name}
+                    {jobs.length > 1 && <span className="font-normal text-muted">· {jobs.length} roles</span>}
                     {personId === brand.leave_cover_person_id && <Badge tone="amber">Leave cover</Badge>}
                   </div>
-                  {jobs.map((job) => (
-                    <div key={job.id} className="mt-1 text-sm">
-                      <span className="text-ink">{job.title}</span>
-                      {job.responsibilities && (
-                        <span className="block text-muted">{job.responsibilities}</span>
-                      )}
-                    </div>
-                  ))}
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {jobs.map((job) => (
+                      <span key={job.id} className="rounded-md border border-line px-2 py-0.5 text-xs text-muted">{job.title}</span>
+                    ))}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
-        <Card>
-          <SectionTitle>History</SectionTitle>
-          <HistoryList entries={(historyRows ?? []) as AuditEntry[]} />
-        </Card>
-      </div>
+      {/* Monthly Canva content calendar */}
+      <section className="mt-3.5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
+        <h2 className="text-base font-bold">Monthly Canva content calendar</h2>
+        {brand.canva_calendar_url ? (
+          <a href={brand.canva_calendar_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-9 items-center text-sm font-bold underline" style={{ color: theme.ink }}>
+            Open this month&apos;s calendar in Canva
+          </a>
+        ) : (
+          <p className="mt-1 text-sm text-muted">No calendar linked yet.</p>
+        )}
+        {canEdit && <CanvaLinkForm brandId={brand.id} currentUrl={brand.canva_calendar_url ?? ""} />}
+      </section>
     </>
   );
+}
+
+// The ring's empty track: a very dark version of the brand colour on black.
+function darkTrack(main: string) {
+  return worldTheme(main).deep + "66";
 }
