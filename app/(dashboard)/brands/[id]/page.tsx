@@ -1,5 +1,9 @@
+import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { mediaUrl } from "@/lib/media";
+import { tint, worldTheme } from "@/lib/colour";
 import { getCurrentUser } from "@/lib/auth";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
 import { Badge, Card, SectionTitle } from "@/components/ui";
@@ -40,6 +44,13 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
     me.role === "updates_manager" ||
     (me.role === "leave_cover" && brand.leave_mode_on && brand.leave_cover_person_id === me.personId);
 
+  // The world's colours, from the logo: the main colour and its shades, and up to
+  // three logo colours for the profile dots.
+  const theme = worldTheme(brand.colour);
+  const dots = [0, 1, 2].map((i) => brand.palette[i] ?? tint(brand.colour, i * 0.3));
+  const banner = mediaUrl(brand.banner_path);
+  const logo = mediaUrl(brand.logo_path);
+
   const target =
     brand.monthly_content_target_min != null
       ? `${brand.monthly_content_target_min}–${brand.monthly_content_target_max} pieces a month`
@@ -47,24 +58,43 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
 
   return (
     <>
-      <section
-        className="relative overflow-hidden rounded-[30px] px-6 pt-8 pb-14 text-white"
-        style={{ background: `linear-gradient(150deg, ${brand.colour} 0%, #0b1f4b 75%, #000000 120%)` }}
-      >
-        <div className="prime-fade-up text-xs font-bold tracking-[0.25em] text-white/80">WELCOME TO THE WORLD OF</div>
-        <h1 className="prime-fade-up mt-1 font-display text-5xl leading-[0.95] font-black tracking-tight" style={{ animationDelay: "0.15s" }}>
-          {brand.name}
-        </h1>
-        <p className="prime-fade-up mt-3 text-sm text-white/85" style={{ animationDelay: "0.3s" }}>{brand.scope}</p>
+      {/* Hero: the brand's banner photo fading into its own deep colour. */}
+      <section className="relative -mx-5 -mt-4 h-[340px] overflow-hidden text-white sm:mx-0 sm:mt-0 sm:rounded-[30px]" style={{ backgroundColor: theme.deep }}>
+        {banner ? (
+          <Image src={banner} alt="" fill priority sizes="(max-width: 768px) 100vw, 768px" className="prime-hero-zoom object-cover object-[center_30%]" />
+        ) : (
+          <div aria-hidden="true" className="absolute inset-0" style={{ background: `linear-gradient(150deg, ${theme.main} 0%, ${theme.deep} 100%)` }} />
+        )}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{ background: `linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 30%, ${theme.deep}bf 70%, ${theme.deep} 100%)` }}
+        />
+        {me.role === "admin" && (
+          <Link
+            href={`/brands/${brand.id}/edit`}
+            className="absolute top-4 right-4 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-black/50 px-4 text-sm font-semibold text-white backdrop-blur hover:bg-black/65"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" /></svg>
+            Edit world
+          </Link>
+        )}
+        <div className="absolute inset-x-5 bottom-7">
+          <div className="prime-fade-up text-xs font-bold tracking-[0.25em] text-white/85">WELCOME TO THE WORLD OF</div>
+          <h1 className="prime-fade-up mt-1 font-display text-5xl leading-[0.95] font-black tracking-tight" style={{ animationDelay: "0.15s" }}>
+            {brand.name}
+          </h1>
+          <p className="prime-fade-up mt-2 text-sm text-white/85" style={{ animationDelay: "0.3s" }}>{brand.scope}</p>
+        </div>
       </section>
 
-      {/* Brand profile. The round spot becomes the brand's logo when onboarding adds uploads. */}
+      {/* Brand profile, with the logo overlapping the hero's edge. */}
       <section aria-label="Brand profile" className="relative mb-5 px-1">
         <span
-          className="-mt-10 ml-5 flex size-20 items-center justify-center rounded-full bg-white font-display text-3xl font-black shadow-lg ring-4 ring-white"
-          style={{ color: brand.colour }}
+          className="relative -mt-10 ml-4 flex size-20 items-center justify-center overflow-hidden rounded-full bg-white font-display text-3xl font-black shadow-lg ring-4 ring-white"
+          style={{ color: theme.ink }}
         >
-          {brand.name.slice(0, 1)}
+          {logo ? <Image src={logo} alt={`${brand.name} logo`} fill sizes="80px" className="object-contain p-1.5" /> : brand.name.slice(0, 1)}
         </span>
         {brand.about && <p className="mt-4 text-[15px] leading-relaxed text-ink">{brand.about}</p>}
         {brand.website && (
@@ -73,7 +103,7 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
             target="_blank"
             rel="noopener noreferrer"
             className="mt-2 inline-flex min-h-9 items-center gap-1.5 text-sm font-bold"
-            style={{ color: brand.colour }}
+            style={{ color: theme.ink }}
           >
             {brand.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
             <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
@@ -82,16 +112,16 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
         {(brand.industry || brand.category || brand.products.length > 0) && (
           <ul className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-4">
             {[
-              ["Industry", brand.industry, 1],
-              ["Category", brand.category, 0.7],
-              ["Products", brand.products.join(" · "), 0.45],
-            ].map(([label, value, strength]) => (
-              <li key={label as string}>
+              ["Industry", brand.industry],
+              ["Category", brand.category],
+              ["Products", brand.products.join(" · ")],
+            ].map(([label, value], i) => (
+              <li key={label}>
                 <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
-                  <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: brand.colour, opacity: strength as number }} />
+                  <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: dots[i] }} />
                   {label}
                 </span>
-                <span className="mt-1 block text-sm font-bold">{(value as string) || "Not set"}</span>
+                <span className="mt-1 block text-sm font-bold">{value || "Not set"}</span>
               </li>
             ))}
           </ul>

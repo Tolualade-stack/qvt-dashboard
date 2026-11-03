@@ -24,6 +24,14 @@ export type Brand = {
   industry: string | null;
   category: string | null;
   products: string[];
+  banner_path: string | null;
+  logo_path: string | null;
+  palette: string[];
+  marketing_types: string[];
+  channels: string[];
+  creative_assets_target: number | null;
+  tv_spots_target: number | null;
+  radio_spots_target: number | null;
   updated_at: string;
 };
 

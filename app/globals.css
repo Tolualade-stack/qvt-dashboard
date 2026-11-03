@@ -53,6 +53,10 @@
 .prime-letter-in { animation: prime-letter-in 0.7s cubic-bezier(0.2, 0.9, 0.2, 1) both; transform-box: fill-box; }
 .prime-fade-up { animation: prime-fade-up 0.7s ease-out both; }
 
+/* A world's banner settles in with a slow zoom. */
+@keyframes prime-hero-zoom { 0% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.prime-hero-zoom { animation: prime-hero-zoom 1.6s ease-out both; }
+
 /* Two lines that take turns, with a flicker as they swap (hero and taglines). */
 @keyframes prime-swap-a {
   0%, 40% { opacity: 1; transform: translateY(0); filter: blur(0); }
@@ -84,7 +88,7 @@
 .prime-float { animation: prime-float 7s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .prime-mark-in, .prime-sheen, .prime-dot-in, .prime-letter-in, .prime-fade-up,
+  .prime-mark-in, .prime-sheen, .prime-dot-in, .prime-letter-in, .prime-fade-up, .prime-hero-zoom,
   .prime-swap-a, .prime-live, .prime-pulse, .prime-float { animation: none; }
   .prime-swap-b { animation: none; opacity: 0; }
 }

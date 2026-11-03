@@ -1,5 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
+import { mediaUrl } from "@/lib/media";
+import { worldTheme } from "@/lib/colour";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime, greeting, longDate } from "@/lib/format";
 import { TIER_LABELS, type Brand, type Person } from "@/lib/types";
@@ -77,21 +80,29 @@ export default async function HomePage() {
             className="block overflow-hidden rounded-[26px] bg-white shadow-lg ring-1 ring-black/5 transition hover:-translate-y-0.5"
             style={{ boxShadow: `0 12px 30px ${brand.colour}2e` }}
           >
-            <div className="relative h-28" style={{ background: `linear-gradient(135deg, ${brand.colour} 0%, #0b1f4b 120%)` }}>
-              <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-xs font-semibold text-white">
+            <div className="relative h-36 overflow-hidden" style={{ background: `linear-gradient(135deg, ${brand.colour} 0%, ${worldTheme(brand.colour).deep} 100%)` }}>
+              {brand.banner_path && (
+                <Image src={mediaUrl(brand.banner_path)!} alt="" fill sizes="(max-width: 640px) 100vw, 380px" className="object-cover object-[center_35%]" />
+              )}
+              <div aria-hidden="true" className="absolute inset-0" style={{ background: `linear-gradient(180deg, rgba(0,0,0,0) 35%, ${worldTheme(brand.colour).deep}d9 100%)` }} />
+              <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-xs font-semibold text-white">
                 <LiveDot colour="#4ADE80" /> Updated {formatDateTime(brand.updated_at)}
               </span>
             </div>
             <div className="relative px-4 pb-4">
               <span
-                className="absolute -top-8 left-4 flex size-16 items-center justify-center rounded-full bg-white font-display text-2xl font-black shadow-md"
-                style={{ color: brand.colour }}
+                className="absolute -top-8 left-4 flex size-16 items-center justify-center overflow-hidden rounded-full bg-white font-display text-2xl font-black shadow-md"
+                style={{ color: worldTheme(brand.colour).ink }}
               >
-                {brand.name.slice(0, 1)}
+                {brand.logo_path ? (
+                  <Image src={mediaUrl(brand.logo_path)!} alt={`${brand.name} logo`} fill sizes="64px" className="object-contain p-1" />
+                ) : (
+                  brand.name.slice(0, 1)
+                )}
               </span>
               <div className="flex items-end justify-between gap-2 pt-10">
                 <div>
-                  <div className="text-xs font-semibold tracking-wider" style={{ color: brand.colour }}>THE WORLD OF</div>
+                  <div className="text-xs font-semibold tracking-wider" style={{ color: worldTheme(brand.colour).ink }}>THE WORLD OF</div>
                   <div className="font-display text-2xl font-black leading-none">{brand.name}</div>
                 </div>
                 <Badge>{TIER_LABELS[brand.tier]}</Badge>
