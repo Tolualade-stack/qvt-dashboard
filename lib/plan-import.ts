@@ -60,8 +60,8 @@ function findInSheet(name: string, rows: Cell[][]): FoundPlan {
 }
 
 // Tries every sheet and keeps the one with the most budget lines.
-export function findBudgetLines(sheets: { sheet: string; data: Cell[][] }[]): FoundPlan {
-  return sheets.map((s) => findInSheet(s.sheet, s.data)).filter(Boolean).sort((a, b) => b!.lines.length - a!.lines.length)[0] ?? null;
+export function findBudgetLines(sheets: { sheet: string; data: readonly (readonly unknown[])[] }[]): FoundPlan {
+  return sheets.map((s) => findInSheet(s.sheet, s.data as Cell[][])).filter(Boolean).sort((a, b) => b!.lines.length - a!.lines.length)[0] ?? null;
 }
 
 // Simple CSV reader (handles quoted cells with commas).
