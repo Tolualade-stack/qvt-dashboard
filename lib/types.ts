@@ -32,6 +32,14 @@ export type Brand = {
   creative_assets_target: number | null;
   tv_spots_target: number | null;
   radio_spots_target: number | null;
+  media_plan_url: string | null;
+  media_plan_path: string | null;
+  strategy_url: string | null;
+  strategy_path: string | null;
+  asset_sla_unit: "hours" | "working_days";
+  asset_sla_warn: number;
+  asset_sla_escalate: number;
+  asset_sla_hard: number;
   updated_at: string;
 };
 

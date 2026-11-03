@@ -7,7 +7,9 @@ import { mediaUrl } from "@/lib/media";
 import { tint, worldTheme } from "@/lib/colour";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { describeChange, whoDidIt } from "@/lib/history";
-import { CHANNELS, MARKETING_TYPES, labelFor } from "@/lib/campaign";
+import { CHANNELS, MARKETING_TYPES, channelName, labelFor } from "@/lib/campaign";
+import { allocate, type BudgetLine } from "@/lib/budget";
+import { BudgetSpread } from "@/components/budget-spread";
 import { lagosMonth, monthCounts, type ContentItem } from "@/lib/content";
 import { REPORT_KIND_LABELS, REPORT_TONES, dueDay, reportState, type CreativeAsset, type Report } from "@/lib/reports";
 import { spotsThisMonth, summarise, type ChannelMetric } from "@/lib/metrics";
@@ -38,6 +40,7 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     { data: reportRows },
     { data: assetRows },
     { data: metricData },
+    { data: budgetRows },
   ] = await Promise.all([
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
     supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
@@ -53,6 +56,7 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     ),
     supabase.from("creative_assets").select("status, deployed_at").eq("brand_id", id).eq("is_archived", false),
     supabase.from("channel_metrics").select("*").eq("brand_id", id),
+    supabase.from("budget_lines").select("*").eq("brand_id", id).order("sort_order"),
   ]);
   const metricRows = (metricData ?? []) as ChannelMetric[];
   if (!brandRow) notFound();
@@ -133,6 +137,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   ).length;
 
   const spots = spotsThisMonth(metricRows, lagosMonth().firstDay);
+  const budgetLines = (budgetRows ?? []) as BudgetLine[];
+  const spread = allocate(budgetLines, ads);
+  const hasPlan = !!(brand.media_plan_url || brand.media_plan_path || brand.strategy_url || brand.strategy_path);
 
   // The next report still to send, for the chip by the logo.
   const nextReport = ((reportRows ?? []) as Report[])[0];
@@ -232,6 +239,13 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
             <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
           </a>
         )}
+        <Link
+          href={`/brands/${brand.id}/plan`}
+          className="mt-2 ml-3 inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-xs font-bold"
+          style={{ backgroundColor: theme.soft, color: theme.ink }}
+        >
+          {hasPlan ? "Media plan & strategy" : me.role === "admin" ? "+ Add media plan & strategy" : "Media plan & budget"}
+        </Link>
         <ul className="mt-3 grid grid-cols-3 gap-2.5 border-t pt-3.5" style={{ borderColor: theme.soft }}>
           {[
             ["Industry", brand.industry],
@@ -257,6 +271,21 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         overview={overview}
         metrics={Object.fromEntries([["all", summarise(metricRows, null)], ...brand.channels.map((c) => [c, summarise(metricRows, c)])])}
       />
+
+      {/* Budget spread: the media plan's lines, filling up as ad spend is logged. */}
+      <section className="mt-5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
+        <div className="mb-3 flex items-baseline justify-between gap-2">
+          <h2 className="text-base font-bold">Budget spread</h2>
+          <Link href={`/brands/${brand.id}/plan`} className="text-sm font-bold" style={{ color: theme.ink }}>
+            {budgetLines.length ? "Plan →" : me.role === "admin" ? "+ Add budget" : ""}
+          </Link>
+        </div>
+        {budgetLines.length ? (
+          <BudgetSpread spread={spread} theme={theme} channelLabel={channelName} />
+        ) : (
+          <p className="text-sm text-muted">No budget from the media plan yet. Once it&apos;s added, ad spend fills each line as ads are updated.</p>
+        )}
+      </section>
 
       {/* TV and Radio: spots aired this month against the plan. */}
       {brand.marketing_types.includes("traditional") && (

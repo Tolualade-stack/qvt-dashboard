@@ -33,7 +33,32 @@ export const CHANNELS = [
   { id: "linkedin", label: "LinkedIn", formats: ["Single image", "Video", "Carousel", "Document"] },
 ] as const;
 
-export const INDUSTRIES = ["FMCG", "Pharma & health", "Finance", "Telecoms", "Sports & events", "Other"];
+// Budget can also go to the non-digital parts of a campaign.
+export const OTHER_BUDGET_CHANNELS: Record<string, { id: string; label: string }[]> = {
+  traditional: [{ id: "tv", label: "TV" }, { id: "radio", label: "Radio" }],
+  ooh: [{ id: "ooh", label: "OOH" }],
+  kol: [{ id: "influencers", label: "Influencers/KOL" }],
+  pr: [{ id: "pr", label: "PR" }],
+  experiential: [{ id: "activations", label: "Activations" }],
+};
+
+// Every channel a brand can plan budget for, in order, with each one's formats.
+export function budgetChannels(channels: string[], marketingTypes: string[]) {
+  return [
+    ...CHANNELS.filter((c) => channels.includes(c.id)).map((c) => ({ id: c.id, label: c.label, formats: c.formats as readonly string[] })),
+    ...marketingTypes.flatMap((t) => (OTHER_BUDGET_CHANNELS[t] ?? []).map((c) => ({ ...c, formats: [] as readonly string[] }))),
+  ];
+}
+
+export function channelName(id: string): string {
+  return (
+    CHANNELS.find((c) => c.id === id)?.label ??
+    Object.values(OTHER_BUDGET_CHANNELS).flat().find((c) => c.id === id)?.label ??
+    id.replace(/_/g, " ").replace(/^./, (ch) => ch.toUpperCase())
+  );
+}
+
+export const INDUSTRIES =["FMCG", "Pharma & health", "Finance", "Telecoms", "Sports & events", "Other"];
 
 export const REPORTING_OPTIONS = [
   "Weekly + monthly reports",
