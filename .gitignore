@@ -50,3 +50,9 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Licensed font files: never published to GitHub
+*.otf
+*.ttf
+*.woff
+*.woff2
