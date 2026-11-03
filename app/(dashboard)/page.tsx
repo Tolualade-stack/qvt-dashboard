@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { greeting, longDate } from "@/lib/format";
 import type { Brand, Person } from "@/lib/types";
+import { monthCounts, type ContentItem } from "@/lib/content";
 import { LiveDot } from "@/components/ui";
 import { PGlyph } from "@/components/prime-logo";
 import { WorldCard } from "@/components/world-card";
@@ -12,10 +13,13 @@ import { WorldCard } from "@/components/world-card";
 export default async function HomePage() {
   const me = (await getCurrentUser())!;
   const supabase = await createClient();
-  const [{ data: brandRows }, { data: peopleRows }] = await Promise.all([
+  const [{ data: brandRows }, { data: peopleRows }, { data: contentRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("is_archived", false).order("sort_order"),
     supabase.from("people").select("id, full_name"),
+    supabase.from("content_items").select("brand_id, status, planned_date, posted_at, is_archived"),
   ]);
+  const content = (contentRows ?? []) as ContentItem[];
+  const postedThisMonth = (brandId: string) => monthCounts(content.filter((c) => c.brand_id === brandId)).posted;
   const brands = (brandRows ?? []) as Brand[];
   const nameOf = new Map(((peopleRows ?? []) as Pick<Person, "id" | "full_name">[]).map((p) => [p.id, p.full_name]));
   const onLeave = brands.filter((b) => b.leave_mode_on).length;
@@ -72,8 +76,8 @@ export default async function HomePage() {
           <WorldCard
             key={brand.id}
             brand={brand}
-            // Headline numbers start at zero; the trackers (Phase 2c) and live numbers (Phase 3) fill them in.
-            stats={{ posted: 0, adsLive: 0, reach: null }}
+            // Ads and reach fill in with the ads tracker and live numbers (Phase 3).
+            stats={{ posted: postedThisMonth(brand.id), adsLive: 0, reach: null }}
             flag={brand.leave_mode_on ? `Leave Mode: ${nameOf.get(brand.leave_cover_person_id ?? "") ?? "cover"}` : null}
           />
         ))}

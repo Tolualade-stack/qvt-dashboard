@@ -1,4 +1,5 @@
 import type { AuditEntry } from "@/lib/types";
+import { STATUS_LABELS, type ContentStatus } from "@/lib/content";
 
 // Turns a raw audit_log row into a short sentence for the history lists,
 // e.g. "turned Leave Mode on for Alieve".
@@ -24,11 +25,21 @@ const FIELD_LABELS: Record<string, string> = {
   is_active: "active status",
   person_id: "linked team member",
   full_name: "name",
-  title: "job title",
+  title: "title",
+  platforms: "platforms",
+  owner_person_id: "owner",
+  planned_date: "planned date",
+  needs_approval: "approval",
+  post_url: "post link",
+  notes: "notes",
   responsibilities: "responsibilities",
 };
 
-const IGNORED_FIELDS = new Set(["created_at", "created_by", "updated_at", "updated_by"]);
+const IGNORED_FIELDS = new Set([
+  "created_at", "created_by", "updated_at", "updated_by",
+  // Set automatically alongside a status change.
+  "status_changed_at", "copy_ready_at", "posted_at", "revision_round",
+]);
 
 function changedFields(entry: AuditEntry): string[] {
   const before = entry.old_data ?? {};
@@ -60,6 +71,17 @@ export function describeChange(entry: AuditEntry): string {
         ? `set the Canva calendar link for ${label}`
         : `removed the Canva calendar link for ${label}`;
     }
+  }
+
+  if (entry.table_name === "content_items") {
+    if (entry.action === "insert") return `added "${label}"`;
+    const fields = changedFields(entry);
+    if (fields.includes("status")) {
+      const to = STATUS_LABELS[entry.new_data?.status as ContentStatus] ?? String(entry.new_data?.status);
+      const sentBack = entry.old_data?.status === "awaiting_approval" && entry.new_data?.status === "asset_in_progress";
+      return sentBack ? `sent "${label}" back for changes (round ${entry.new_data?.revision_round})` : `moved "${label}" to ${to}`;
+    }
+    if (fields.length === 1 && fields[0] === "post_url") return `added the post link for "${label}"`;
   }
 
   if (entry.table_name === "profiles") {

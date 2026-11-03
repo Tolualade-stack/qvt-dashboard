@@ -8,6 +8,7 @@ import { tint, worldTheme } from "@/lib/colour";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { describeChange, whoDidIt } from "@/lib/history";
 import { CHANNELS, MARKETING_TYPES, labelFor } from "@/lib/campaign";
+import { monthCounts, type ContentItem } from "@/lib/content";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
 import { Badge, LiveDot } from "@/components/ui";
 import { WorldPerformance } from "@/components/world-performance";
@@ -21,18 +22,29 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   const supabase = await createClient();
   const me = (await getCurrentUser())!;
 
-  const [{ data: brandRow }, { data: roleRows }, { data: peopleRows }, { data: historyRows }] = await Promise.all([
+  const [{ data: brandRow }, { data: roleRows }, { data: peopleRows }, { data: historyRows }, { data: contentRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
     supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
     supabase.from("people").select("id, slug, full_name, is_placeholder"),
     supabase.from("audit_log").select("*").eq("table_name", "brands").eq("row_id", id).order("changed_at", { ascending: false }).limit(8),
+    supabase.from("content_items").select("*").eq("brand_id", id),
   ]);
   if (!brandRow) notFound();
 
   const brand = brandRow as Brand;
   const roles = (roleRows ?? []) as BrandRole[];
   const people = new Map(((peopleRows ?? []) as Person[]).map((p) => [p.id, p]));
-  const history = (historyRows ?? []) as AuditEntry[];
+  const content = (contentRows ?? []) as ContentItem[];
+  const counts = monthCounts(content);
+
+  // "Latest in this world": changes to the brand and to its content, newest first.
+  const contentIds = content.map((c) => c.id);
+  const { data: contentHistory } = contentIds.length
+    ? await supabase.from("audit_log").select("*").eq("table_name", "content_items").in("row_id", contentIds).order("changed_at", { ascending: false }).limit(8)
+    : { data: [] };
+  const history = [...((historyRows ?? []) as AuditEntry[]), ...((contentHistory ?? []) as AuditEntry[])]
+    .sort((a, b) => b.changed_at.localeCompare(a.changed_at))
+    .slice(0, 8);
   const coverName = people.get(brand.leave_cover_person_id ?? "")?.full_name;
 
   const theme = worldTheme(brand.colour);
@@ -176,24 +188,42 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         </div>
       </section>
 
-      {/* Content this month */}
+      {/* Content this month: one bar split by where each piece is now. */}
       <section className="mt-3.5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="text-base font-bold">Content this month</h2>
-          <span className="font-display text-lg font-black" style={{ color: theme.ink }}>{contentTarget ? `0 of ${contentTarget}` : "No target"}</span>
+          <span className="font-display text-lg font-black" style={{ color: theme.ink }}>
+            {contentTarget ? `${counts.posted} of ${contentTarget}` : `${counts.posted} posted`}
+          </span>
         </div>
-        <div aria-hidden="true" className="mt-3 h-3.5 rounded-full" style={{ backgroundColor: theme.soft }} />
+        <div aria-hidden="true" className="mt-3 flex h-3.5 gap-0.5 overflow-hidden rounded-full" style={{ backgroundColor: theme.soft }}>
+          {[
+            [counts.posted, dots[0]],
+            [counts.scheduled, dots[1]],
+            [counts.awaiting, dots[2]],
+            [counts.inProgress, "#C9C2BF"],
+          ].map(([n, colour], i) =>
+            Number(n) > 0 ? (
+              <span key={i} style={{ width: `${(Number(n) / Math.max(counts.total, brand.monthly_content_target_max ?? 0, 1)) * 100}%`, backgroundColor: colour as string }} />
+            ) : null,
+          )}
+        </div>
         <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
           {[
-            ["posted", dots[0]],
-            ["scheduled", dots[1]],
-            ["awaiting approval", dots[2]],
-          ].map(([label, colour]) => (
+            [counts.posted, "posted", dots[0]],
+            [counts.scheduled, "scheduled", dots[1]],
+            [counts.awaiting, "awaiting approval", dots[2]],
+            [counts.inProgress, "in progress", "#C9C2BF"],
+          ].map(([n, label, colour]) => (
             <span key={label} className="inline-flex items-center gap-1.5">
-              <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: colour }} />0 {label}
+              <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: colour as string }} />
+              {n} {label}
             </span>
           ))}
         </div>
+        <Link href={`/brands/${brand.id}/update`} className="mt-3 inline-flex min-h-9 items-center text-sm font-bold" style={{ color: theme.ink }}>
+          See all content →
+        </Link>
       </section>
 
       {/* Latest in this world */}
@@ -256,6 +286,19 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         )}
         {canEdit && <CanvaLinkForm brandId={brand.id} currentUrl={brand.canva_calendar_url ?? ""} />}
       </section>
+
+      {/* The world's own Update button, floating just above the menu bar. */}
+      {canEdit && (
+        <Link
+          href={`/brands/${brand.id}/update`}
+          aria-label={`Add an update to ${brand.name}`}
+          className="fixed right-5 bottom-[104px] z-30 inline-flex h-[58px] items-center gap-2.5 rounded-[22px] px-[22px] font-display text-[17px] font-extrabold transition hover:scale-105"
+          style={{ background: `linear-gradient(135deg, ${theme.main} 0%, ${theme.deep} 100%)`, color: theme.onMain, boxShadow: `0 14px 30px ${theme.main}73` }}
+        >
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          Update
+        </Link>
+      )}
     </>
   );
 }
