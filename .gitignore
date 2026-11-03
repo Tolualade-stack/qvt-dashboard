@@ -47,3 +47,6 @@ next-env.d.ts
 
 # Claude desktop app preview settings
 /.claude/
+
+# Local Netlify folder
+.netlify
