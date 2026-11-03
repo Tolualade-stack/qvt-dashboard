@@ -1,28 +1,23 @@
-import Image from "next/image";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { mediaUrl } from "@/lib/media";
-import { worldTheme } from "@/lib/colour";
 import { createClient } from "@/lib/supabase/server";
-import { formatDateTime, greeting, longDate } from "@/lib/format";
-import { TIER_LABELS, type Brand, type Person } from "@/lib/types";
-import { Badge, LiveDot } from "@/components/ui";
+import { greeting, longDate } from "@/lib/format";
+import type { Brand, Person } from "@/lib/types";
+import { LiveDot } from "@/components/ui";
 import { PGlyph } from "@/components/prime-logo";
+import { WorldCard } from "@/components/world-card";
 
 // Home: a welcome panel, the "Create a Dashboard" hero, then every brand as a
 // "world" in its own colours. Phase 3 adds live numbers to the world cards.
 export default async function HomePage() {
   const me = (await getCurrentUser())!;
   const supabase = await createClient();
-  const [{ data: brandRows }, { data: roles }, { data: peopleRows }] = await Promise.all([
+  const [{ data: brandRows }, { data: peopleRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("is_archived", false).order("sort_order"),
-    supabase.from("brand_roles").select("brand_id, person_id").is("ended_at", null),
     supabase.from("people").select("id, full_name"),
   ]);
   const brands = (brandRows ?? []) as Brand[];
   const nameOf = new Map(((peopleRows ?? []) as Pick<Person, "id" | "full_name">[]).map((p) => [p.id, p.full_name]));
-  const teamSize = (brandId: string) =>
-    new Set((roles ?? []).filter((r) => r.brand_id === brandId).map((r) => r.person_id)).size;
   const onLeave = brands.filter((b) => b.leave_mode_on).length;
 
   return (
@@ -74,50 +69,13 @@ export default async function HomePage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {brands.map((brand) => (
-          <Link
+          <WorldCard
             key={brand.id}
-            href={`/brands/${brand.id}`}
-            className="block overflow-hidden rounded-[26px] bg-white shadow-lg ring-1 ring-black/5 transition hover:-translate-y-0.5"
-            style={{ boxShadow: `0 12px 30px ${brand.colour}2e` }}
-          >
-            <div className="relative h-36 overflow-hidden" style={{ background: `linear-gradient(135deg, ${brand.colour} 0%, ${worldTheme(brand.colour).deep} 100%)` }}>
-              {brand.banner_path && (
-                <Image src={mediaUrl(brand.banner_path)!} alt="" fill sizes="(max-width: 640px) 100vw, 380px" className="object-cover object-[center_35%]" />
-              )}
-              <div aria-hidden="true" className="absolute inset-0" style={{ background: `linear-gradient(180deg, rgba(0,0,0,0) 35%, ${worldTheme(brand.colour).deep}d9 100%)` }} />
-              <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-xs font-semibold text-white">
-                <LiveDot colour="#4ADE80" /> Updated {formatDateTime(brand.updated_at)}
-              </span>
-            </div>
-            <div className="relative px-4 pb-4">
-              <span
-                className="absolute -top-8 left-4 flex size-16 items-center justify-center overflow-hidden rounded-full bg-white font-display text-2xl font-black shadow-md"
-                style={{ color: worldTheme(brand.colour).ink }}
-              >
-                {brand.logo_path ? (
-                  <Image src={mediaUrl(brand.logo_path)!} alt={`${brand.name} logo`} fill sizes="64px" className="object-contain p-1" />
-                ) : (
-                  brand.name.slice(0, 1)
-                )}
-              </span>
-              <div className="flex items-end justify-between gap-2 pt-10">
-                <div>
-                  <div className="text-xs font-semibold tracking-wider" style={{ color: worldTheme(brand.colour).ink }}>THE WORLD OF</div>
-                  <div className="font-display text-2xl font-black leading-none">{brand.name}</div>
-                </div>
-                <Badge>{TIER_LABELS[brand.tier]}</Badge>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-                <span>{teamSize(brand.id)} people</span>
-                <span>{brand.reporting}</span>
-              </div>
-              {brand.leave_mode_on && (
-                <div className="mt-3">
-                  <Badge tone="amber">Leave Mode on: {nameOf.get(brand.leave_cover_person_id ?? "") ?? "cover"} can edit</Badge>
-                </div>
-              )}
-            </div>
-          </Link>
+            brand={brand}
+            // Headline numbers start at zero; the trackers (Phase 2c) and live numbers (Phase 3) fill them in.
+            stats={{ posted: 0, adsLive: 0, reach: null }}
+            flag={brand.leave_mode_on ? `Leave Mode: ${nameOf.get(brand.leave_cover_person_id ?? "") ?? "cover"}` : null}
+          />
         ))}
       </div>
     </div>

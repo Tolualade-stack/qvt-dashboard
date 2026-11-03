@@ -12,6 +12,17 @@ export function formatDateTime(value: string | Date): string {
   }).format(new Date(value));
 }
 
+// e.g. "just now", "40 min ago", "3 h ago", "yesterday", "4 days ago"
+export function timeAgo(value: string | Date): string {
+  const minutes = Math.round((Date.now() - new Date(value).getTime()) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "yesterday" : `${days} days ago`;
+}
+
 // e.g. "Tuesday, 3 November"
 export function longDate(value: Date): string {
   return new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, weekday: "long", day: "numeric", month: "long" }).format(value);
