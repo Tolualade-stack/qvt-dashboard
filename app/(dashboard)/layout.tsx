@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABELS } from "@/lib/types";
 import { signOut } from "@/app/login/actions";
 import { Button, Card } from "@/components/ui";
+import { PrimeMark, PrimeWordmark } from "@/components/prime-logo";
+import { BottomNav } from "@/components/bottom-nav";
 
-// The frame around every logged-in page: header, menu and sign-out.
+// The frame around every logged-in page: header, floating menu bar.
 // The "(dashboard)" folder name groups these pages without adding to the URL.
 export default async function DashboardLayout({ children }: LayoutProps<"/">) {
   const me = await getCurrentUser();
@@ -14,10 +17,8 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
     return (
       <main className="mx-auto max-w-sm px-4 py-16">
         <Card>
-          <h1 className="text-lg font-semibold">No access</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Your login is not active. Ask the Admin to switch it on.
-          </p>
+          <h1 className="font-display text-2xl font-black text-navy">No access</h1>
+          <p className="mt-2 text-sm text-muted">Your login is not active. Ask your Admin to switch it on.</p>
           <form action={signOut} className="mt-4">
             <Button variant="secondary" className="w-full">Sign out</Button>
           </form>
@@ -26,40 +27,26 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
     );
   }
 
-  const links = [
-    { href: "/", label: "Brands" },
-    ...(me.role === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
-    { href: "/account", label: "My account" },
-  ];
+  // During the pilot there is one workspace; its name shows in the header.
+  const supabase = await createClient();
+  const { data: workspace } = await supabase.from("workspaces").select("name").order("sort_order").limit(1).maybeSingle();
 
   return (
-    <div className="min-h-dvh">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <Link href="/" className="font-semibold">QVT Dashboard</Link>
-          <div className="flex items-center gap-2 text-right">
-            <div className="text-xs leading-tight">
-              <div className="font-medium text-slate-900">{me.name}</div>
-              <div className="text-slate-500">{ROLE_LABELS[me.role]}</div>
-            </div>
-            <form action={signOut}>
-              <Button variant="secondary" className="min-h-9 px-3 text-xs">Sign out</Button>
-            </form>
-          </div>
-        </div>
-        <nav className="mx-auto flex max-w-3xl gap-1 overflow-x-auto px-2 pb-2">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+    <div className="min-h-dvh pb-32">
+      <header className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-5 pt-5 pb-2">
+        <Link href="/" className="flex items-center gap-2.5" aria-label="PRIME home">
+          <PrimeMark size={36} />
+          <PrimeWordmark height={22} />
+        </Link>
+        <Link href="/account" className="flex items-center gap-2" aria-label={`${me.name}, ${ROLE_LABELS[me.role]}`}>
+          {workspace && <span className="hidden rounded-full bg-mist px-3 py-1.5 text-xs font-semibold text-muted sm:inline">{workspace.name}</span>}
+          <span className="flex size-10 items-center justify-center rounded-full bg-ink font-display text-base font-black text-white">
+            {me.name.slice(0, 1).toUpperCase()}
+          </span>
+        </Link>
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-5">{children}</main>
+      <main className="mx-auto max-w-3xl px-5 py-4">{children}</main>
+      <BottomNav isAdmin={me.role === "admin"} />
     </div>
   );
 }

@@ -15,6 +15,27 @@ import type { AppRole } from "@/lib/types";
 const ROLES: AppRole[] = ["admin", "updates_manager", "leave_cover", "viewer"];
 const MIN_PASSWORD = 8;
 
+// Adds a workspace: a company using PRIME, with its own brands and team.
+export async function addWorkspace(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireAdmin();
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  if (name.length < 2) return fail("Give the workspace a name.");
+
+  // A short fixed key from the name, e.g. "Ad Continuum" -> "ad-continuum".
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workspace";
+
+  const supabase = await createClient();
+  const { count } = await supabase.from("workspaces").select("id", { count: "exact", head: true });
+  const { error } = await supabase
+    .from("workspaces")
+    .insert({ name, slug, description: description || null, sort_order: (count ?? 0) + 1 });
+  if (error) return fail(error.code === "23505" ? "There is already a workspace with that name." : error.message);
+
+  revalidatePath("/", "layout");
+  return ok(`Workspace "${name}" added.`);
+}
+
 // Turns a brand's Leave Mode on or off.
 export async function setLeaveMode(formData: FormData) {
   await requireAdmin();

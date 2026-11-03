@@ -1,5 +1,90 @@
 @import "tailwindcss";
 
+/* PRIME's colours and fonts. Use them in class names, e.g. bg-navy, text-live, font-display. */
 @theme inline {
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-display-face), var(--font-inter), system-ui, sans-serif;
+
+  --color-navy: #0b1f4b;
+  --color-navy-bright: #1a3a86;
+  --color-ink: #000000;
+  --color-live: #2f6bff;
+  --color-live-soft: #4c7dff;
+  --color-mist: #f3f5fa;
+  --color-line: #e6eaf2;
+  --color-muted: #44516b;
+}
+
+/* The navy-to-black gradient used on hero panels and main buttons. */
+.prime-gradient {
+  background: linear-gradient(150deg, #1a3a86 0%, #0b1f4b 40%, #000000 100%);
+}
+
+/* ---------- Animations (all switch off for people who prefer less motion) ---------- */
+
+/* Logo intro: the P tile bursts in, the live dot pops, the wordmark letters rise. */
+@keyframes prime-mark-in {
+  0% { transform: scale(0.15) rotate(-28deg); opacity: 0; }
+  55% { transform: scale(1.15) rotate(5deg); opacity: 1; }
+  80% { transform: scale(0.97) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes prime-sheen {
+  0% { transform: translateX(-160%) skewX(-22deg); }
+  100% { transform: translateX(220%) skewX(-22deg); }
+}
+@keyframes prime-dot-in {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.7); }
+  100% { transform: scale(1); }
+}
+@keyframes prime-letter-in {
+  0% { transform: translateY(120%); opacity: 0; }
+  70% { transform: translateY(-8%); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes prime-fade-up {
+  0% { transform: translateY(14px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.prime-mark-in { animation: prime-mark-in 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) both; transform-origin: 50% 50%; }
+.prime-sheen { animation: prime-sheen 1.1s ease-in-out 0.6s both; }
+.prime-dot-in { animation: prime-dot-in 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) 0.7s both; transform-box: fill-box; transform-origin: center; }
+.prime-letter-in { animation: prime-letter-in 0.7s cubic-bezier(0.2, 0.9, 0.2, 1) both; transform-box: fill-box; }
+.prime-fade-up { animation: prime-fade-up 0.7s ease-out both; }
+
+/* Two lines that take turns, with a flicker as they swap (hero and taglines). */
+@keyframes prime-swap-a {
+  0%, 40% { opacity: 1; transform: translateY(0); filter: blur(0); }
+  42% { opacity: 0.15; } 43% { opacity: 1; } 45% { opacity: 0.1; }
+  47%, 93% { opacity: 0; transform: translateY(-10px); filter: blur(4px); }
+  96% { opacity: 0.4; }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes prime-swap-b {
+  0%, 44% { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  46% { opacity: 0.5; } 47% { opacity: 0.1; }
+  49%, 89% { opacity: 1; transform: translateY(0); filter: blur(0); }
+  91% { opacity: 0.2; } 92% { opacity: 1; }
+  94%, 100% { opacity: 0; transform: translateY(-10px); }
+}
+.prime-swap-a { animation: prime-swap-a 6s ease-in-out infinite; }
+.prime-swap-b { animation: prime-swap-b 6s ease-in-out infinite; }
+
+/* A soft pulse for "live" dots and the create button. */
+@keyframes prime-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes prime-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(76, 125, 255, 0.55); }
+  70% { box-shadow: 0 0 0 16px rgba(76, 125, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(76, 125, 255, 0); }
+}
+@keyframes prime-float { 0%, 100% { transform: translateY(0) rotate(-8deg); } 50% { transform: translateY(-10px) rotate(-5deg); } }
+.prime-live { animation: prime-live 1.6s ease-in-out infinite; }
+.prime-pulse { animation: prime-pulse 2.2s ease-out infinite; }
+.prime-float { animation: prime-float 7s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .prime-mark-in, .prime-sheen, .prime-dot-in, .prime-letter-in, .prime-fade-up,
+  .prime-swap-a, .prime-live, .prime-pulse, .prime-float { animation: none; }
+  .prime-swap-b { animation: none; opacity: 0; }
 }

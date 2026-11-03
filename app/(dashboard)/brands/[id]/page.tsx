@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
-import { Badge, BrandStripe, Card, PageTitle, SectionTitle } from "@/components/ui";
+import { Badge, Card, SectionTitle } from "@/components/ui";
 import { HistoryList } from "@/components/history-list";
 import { CanvaLinkForm } from "./canva-link-form";
 
@@ -13,7 +13,7 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
 
   const [{ data: brandRow }, { data: roleRows }, { data: peopleRows }, { data: historyRows }] = await Promise.all([
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
-    supabase.from("brand_roles").select("*").eq("brand_id", id).order("sort_order"),
+    supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
     supabase.from("people").select("id, slug, full_name, is_placeholder"),
     supabase
       .from("audit_log")
@@ -47,10 +47,16 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
 
   return (
     <>
-      <BrandStripe colour={brand.colour} />
-      <div className="mt-3">
-        <PageTitle subtitle={brand.scope}>{brand.name}</PageTitle>
-      </div>
+      <section
+        className="relative mb-5 overflow-hidden rounded-[30px] p-6 text-white"
+        style={{ background: `linear-gradient(150deg, ${brand.colour} 0%, #0b1f4b 75%, #000000 120%)` }}
+      >
+        <div className="prime-fade-up text-xs font-bold tracking-[0.25em] text-white/80">WELCOME TO THE WORLD OF</div>
+        <h1 className="prime-fade-up mt-1 font-display text-5xl leading-[0.95] font-black tracking-tight" style={{ animationDelay: "0.15s" }}>
+          {brand.name}
+        </h1>
+        <p className="prime-fade-up mt-3 text-sm text-white/85" style={{ animationDelay: "0.3s" }}>{brand.scope}</p>
+      </section>
 
       <div className="space-y-4">
         <Card>
@@ -64,11 +70,11 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
           </div>
           <dl className="mt-3 space-y-1 text-sm">
             <div className="flex justify-between gap-2">
-              <dt className="text-slate-500">Reporting</dt>
+              <dt className="text-muted">Reporting</dt>
               <dd className="text-right">{brand.reporting}</dd>
             </div>
             <div className="flex justify-between gap-2">
-              <dt className="text-slate-500">Content target</dt>
+              <dt className="text-muted">Content target</dt>
               <dd className="text-right">{target}</dd>
             </div>
           </dl>
@@ -81,19 +87,19 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
               href={brand.canva_calendar_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="break-all text-sm font-medium text-blue-700 underline"
+              className="break-all text-sm font-medium text-live underline"
             >
               Open this month&apos;s calendar in Canva
             </a>
           ) : (
-            <p className="text-sm text-slate-500">No calendar linked yet.</p>
+            <p className="text-sm text-muted">No calendar linked yet.</p>
           )}
           {canEdit && <CanvaLinkForm brandId={brand.id} currentUrl={brand.canva_calendar_url ?? ""} />}
         </Card>
 
         <Card>
           <SectionTitle>Team</SectionTitle>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-line">
             {[...team.entries()].map(([personId, jobs]) => {
               const person = people.get(personId);
               return (
@@ -105,9 +111,9 @@ export default async function BrandPage({ params }: PageProps<"/brands/[id]">) {
                   </div>
                   {jobs.map((job) => (
                     <div key={job.id} className="mt-1 text-sm">
-                      <span className="text-slate-800">{job.title}</span>
+                      <span className="text-ink">{job.title}</span>
                       {job.responsibilities && (
-                        <span className="block text-slate-500">{job.responsibilities}</span>
+                        <span className="block text-muted">{job.responsibilities}</span>
                       )}
                     </div>
                   ))}

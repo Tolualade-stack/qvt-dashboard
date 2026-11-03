@@ -1,8 +1,8 @@
-# QVT Campaign Dashboard
+# PRIME
 
-A live dashboard for QVT Media's Team 1 brands (Alieve, Ducros, CCR). It shows the status of
-every content piece, ad and report, logs updates that happen in conversation, and flags
-anything overdue with who to escalate to.
+Every campaign. Live. A campaign dashboard for agencies: each brand is a "world" showing the status of
+its content, ads and reports, with updates logged as they happen and anything overdue flagged
+with who to escalate to. QVT Media is the founding pilot partner.
 
 ## Built with
 

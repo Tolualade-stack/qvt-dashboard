@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { ROLE_DESCRIPTIONS, ROLE_LABELS, type AppRole, type AuditEntry, type Brand, type Person } from "@/lib/types";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, type AppRole, type AuditEntry, type Brand, type Person, type Workspace } from "@/lib/types";
 import { Badge, BrandStripe, Button, Card, PageTitle, SectionTitle } from "@/components/ui";
 import { HistoryList } from "@/components/history-list";
 import { setLeaveMode, setLoginActive } from "./actions";
-import { CreateLoginForm, ResetPasswordForm } from "./forms";
+import { AddWorkspaceForm, CreateLoginForm, ResetPasswordForm } from "./forms";
 
-export const metadata: Metadata = { title: "Admin · QVT Campaign Dashboard" };
+export const metadata: Metadata = { title: "Admin · PRIME" };
 
 type Profile = { user_id: string; person_id: string | null; email: string; app_role: AppRole; is_active: boolean };
 
@@ -15,12 +15,14 @@ export default async function AdminPage() {
   const me = await requireAdmin();
   const supabase = await createClient();
 
-  const [{ data: brandRows }, { data: peopleRows }, { data: profileRows }, { data: historyRows }] = await Promise.all([
+  const [{ data: brandRows }, { data: peopleRows }, { data: profileRows }, { data: historyRows }, { data: workspaceRows }] = await Promise.all([
     supabase.from("brands").select("*").order("sort_order"),
     supabase.from("people").select("id, slug, full_name, is_placeholder").order("full_name"),
     supabase.from("profiles").select("user_id, person_id, email, app_role, is_active").order("email"),
     supabase.from("audit_log").select("*").order("changed_at", { ascending: false }).limit(15),
+    supabase.from("workspaces").select("id, slug, name, description").order("sort_order"),
   ]);
+  const workspaces = (workspaceRows ?? []) as Workspace[];
   const brands = (brandRows ?? []) as Brand[];
   const people = (peopleRows ?? []) as Person[];
   const profiles = (profileRows ?? []) as Profile[];
@@ -36,19 +38,38 @@ export default async function AdminPage() {
 
       <div className="space-y-4">
         <Card>
+          <SectionTitle>Workspaces</SectionTitle>
+          <p className="mb-3 text-sm text-muted">Each company using PRIME is a workspace, with its own brands and team.</p>
+          <ul className="mb-4 space-y-2">
+            {workspaces.map((ws) => (
+              <li key={ws.id} className="flex items-center gap-3 rounded-2xl bg-mist p-3">
+                <span className="prime-gradient flex size-10 items-center justify-center rounded-xl font-display text-lg font-black text-white">
+                  {ws.name.slice(0, 1)}
+                </span>
+                <span>
+                  <span className="block font-semibold">{ws.name}</span>
+                  {ws.description && <span className="block text-sm text-muted">{ws.description}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <AddWorkspaceForm />
+        </Card>
+
+        <Card>
           <SectionTitle>Leave Mode</SectionTitle>
-          <p className="mb-3 text-sm text-slate-600">
+          <p className="mb-3 text-sm text-muted">
             Switch on when you go on leave. The brand&apos;s leave cover can then edit that brand until you switch
             it off.
           </p>
           <ul className="space-y-3">
             {brands.map((brand) => (
-              <li key={brand.id} className="rounded-lg border border-slate-200 p-3">
+              <li key={brand.id} className="rounded-2xl border border-line p-4">
                 <BrandStripe colour={brand.colour} />
                 <div className="mt-2 flex items-center justify-between gap-3">
                   <div>
                     <div className="font-medium">{brand.name}</div>
-                    <div className="text-sm text-slate-600">
+                    <div className="text-sm text-muted">
                       Cover: {nameOf.get(brand.leave_cover_person_id ?? "") ?? "not set"}
                     </div>
                   </div>
@@ -70,7 +91,7 @@ export default async function AdminPage() {
 
         <Card>
           <SectionTitle>Logins</SectionTitle>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-line">
             {profiles.map((profile) => (
               <li key={profile.user_id} className="py-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -78,7 +99,7 @@ export default async function AdminPage() {
                   <Badge tone={profile.app_role === "admin" ? "green" : "grey"}>{ROLE_LABELS[profile.app_role]}</Badge>
                   {!profile.is_active && <Badge tone="red">Deactivated</Badge>}
                 </div>
-                <div className="text-sm text-slate-500">{profile.email}</div>
+                <div className="text-sm text-muted">{profile.email}</div>
                 {profile.user_id !== me.userId && (
                   <div className="mt-2 flex flex-wrap items-start gap-2">
                     <form action={setLoginActive}>
@@ -98,10 +119,10 @@ export default async function AdminPage() {
 
         <Card>
           <SectionTitle>Create a login</SectionTitle>
-          <ul className="mb-3 space-y-1 text-sm text-slate-600">
+          <ul className="mb-3 space-y-1 text-sm text-muted">
             {(Object.keys(ROLE_LABELS) as AppRole[]).map((role) => (
               <li key={role}>
-                <span className="font-medium text-slate-800">{ROLE_LABELS[role]}:</span> {ROLE_DESCRIPTIONS[role]}
+                <span className="font-medium text-ink">{ROLE_LABELS[role]}:</span> {ROLE_DESCRIPTIONS[role]}
               </li>
             ))}
           </ul>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createLogin, resetPassword } from "./actions";
+import { addWorkspace, createLogin, resetPassword } from "./actions";
 import { Button, Field, FormMessage, inputClass } from "@/components/ui";
 import { ROLE_LABELS, type AppRole } from "@/lib/types";
 
@@ -9,7 +9,7 @@ export function CreateLoginForm({ people }: { people: { id: string; name: string
   const [state, formAction, pending] = useActionState(createLogin, null);
 
   if (people.length === 0) {
-    return <p className="text-sm text-slate-500">Every team member already has a login.</p>;
+    return <p className="text-sm text-muted">Every team member already has a login.</p>;
   }
 
   return (
@@ -38,6 +38,30 @@ export function CreateLoginForm({ people }: { people: { id: string; name: string
       </Field>
       <FormMessage state={state} />
       <Button type="submit" disabled={pending}>{pending ? "Creating…" : "Create login"}</Button>
+    </form>
+  );
+}
+
+export function AddWorkspaceForm() {
+  const [open, setOpen] = useState(false);
+  const [state, formAction, pending] = useActionState(addWorkspace, null);
+
+  if (!open) {
+    return <Button variant="secondary" type="button" onClick={() => setOpen(true)}>+ Add a workspace</Button>;
+  }
+  return (
+    <form action={formAction} className="space-y-3">
+      <Field label="Workspace name" hint="The company using PRIME, e.g. an agency or one of its sister companies.">
+        <input name="name" required className={inputClass} />
+      </Field>
+      <Field label="Short description (optional)">
+        <input name="description" className={inputClass} />
+      </Field>
+      <FormMessage state={state} />
+      <div className="flex gap-2">
+        <Button type="submit" disabled={pending}>{pending ? "Adding…" : "Add workspace"}</Button>
+        <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Close</Button>
+      </div>
     </form>
   );
 }

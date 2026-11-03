@@ -46,6 +46,6 @@ export const config = {
   // Every page except Next.js's own files, images, and the app manifest and icons
   // (phones fetch those before anyone has logged in).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|apple-icon|app-icon|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|app-icon|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

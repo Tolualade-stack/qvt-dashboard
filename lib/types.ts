@@ -17,7 +17,15 @@ export type Brand = {
   canva_calendar_url: string | null;
   leave_cover_person_id: string | null;
   leave_mode_on: boolean;
+  workspace_id: string;
   updated_at: string;
+};
+
+export type Workspace = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
 };
 
 export type Person = {
@@ -25,16 +33,54 @@ export type Person = {
   slug: string;
   full_name: string;
   is_placeholder: boolean;
+  is_active: boolean;
+  workspace_id: string;
 };
 
+// A standard role from the workspace's editable catalogue.
+export type CatalogueRole = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  role_key: RoleKey;
+  sort_order: number;
+  is_active: boolean;
+};
+
+// One person's job on one brand. ended_at is set when they move off it.
 export type BrandRole = {
   id: string;
   brand_id: string;
   person_id: string;
+  role_id: string | null;
   role_key: string;
   title: string;
   responsibilities: string | null;
   sort_order: number;
+  started_at: string;
+  ended_at: string | null;
+};
+
+export type RoleKey =
+  | "account_manager" | "account_deputy" | "digital_lead" | "channel_manager" | "digital_executive"
+  | "creative" | "kol_lead" | "partnerships" | "quality_assurance" | "finance" | "buying" | "support" | "other";
+
+// What each kind of role means for escalation (shown when adding a role).
+export const ROLE_KEY_LABELS: Record<RoleKey, string> = {
+  account_manager: "Account Manager",
+  account_deputy: "Account Deputy / leave cover",
+  digital_lead: "Digital Lead",
+  channel_manager: "Channel Manager",
+  digital_executive: "Digital Executive",
+  creative: "Creative",
+  kol_lead: "Influencer / KOL",
+  partnerships: "Partnerships",
+  quality_assurance: "Quality assurance",
+  finance: "Finance",
+  buying: "Media buying",
+  support: "Support",
+  other: "Other",
 };
 
 export type AuditEntry = {
