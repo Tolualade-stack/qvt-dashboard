@@ -4,7 +4,7 @@
 
 export const MARKETING_TYPES = [
   { id: "digital", label: "Digital" },
-  { id: "traditional", label: "Traditional (TV/Radio)" },
+  { id: "traditional", label: "Traditional (TV, Radio, Print)" },
   { id: "ooh", label: "OOH" },
   { id: "experiential", label: "Experiential" },
   { id: "kol", label: "Influencer/KOL" },
@@ -35,7 +35,7 @@ export const CHANNELS = [
 
 // Budget can also go to the non-digital parts of a campaign.
 export const OTHER_BUDGET_CHANNELS: Record<string, { id: string; label: string }[]> = {
-  traditional: [{ id: "tv", label: "TV" }, { id: "radio", label: "Radio" }],
+  traditional: [{ id: "tv", label: "TV" }, { id: "radio", label: "Radio" }, { id: "print", label: "Print" }],
   ooh: [{ id: "ooh", label: "OOH" }],
   kol: [{ id: "influencers", label: "Influencers/KOL" }],
   pr: [{ id: "pr", label: "PR" }],

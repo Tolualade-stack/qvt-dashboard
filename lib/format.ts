@@ -12,6 +12,9 @@ export function formatDateTime(value: string | Date): string {
   }).format(new Date(value));
 }
 
+// The current moment, for pages and handlers that need one fixed value.
+export const currentTime = () => Date.now();
+
 // A date in Lagos as YYYY-MM-DD, `offsetDays` from today (e.g. -6 for a week ago).
 export function lagosDate(offsetDays = 0, now = Date.now()): string {
   return new Date(now + 60 * 60 * 1000 + offsetDays * 86_400_000).toISOString().slice(0, 10);

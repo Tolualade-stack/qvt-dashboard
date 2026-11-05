@@ -7,6 +7,7 @@ import { monthCounts, type ContentItem } from "@/lib/content";
 import type { Ad } from "@/lib/ads";
 import { compact, summarise, type ChannelMetric } from "@/lib/metrics";
 import { loadFlags } from "@/lib/attention";
+import { loadMyWork } from "@/lib/work";
 import { LiveDot } from "@/components/ui";
 import { PGlyph } from "@/components/prime-logo";
 import { WorldCard } from "@/components/world-card";
@@ -26,7 +27,8 @@ export default async function HomePage() {
   const brands = (brandRows ?? []) as Brand[];
   const nameOf = new Map(((peopleRows ?? []) as Pick<Person, "id" | "full_name">[]).map((p) => [p.id, p.full_name]));
   const onLeave = brands.filter((b) => b.leave_mode_on).length;
-  const flags = await loadFlags(supabase, brands);
+  const [flags, { items: myWork }] = await Promise.all([loadFlags(supabase, brands), loadMyWork(supabase, me)]);
+  const workCount = myWork.length;
 
   const metrics = (metricRows ?? []) as ChannelMetric[];
   const reachOf = (brandId: string) => {
@@ -71,6 +73,14 @@ export default async function HomePage() {
           {onLeave > 0 && <span className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold">Leave Mode on · {onLeave}</span>}
         </div>
       </section>
+
+      <Link href="/work" className="prime-gradient flex min-h-[72px] items-center gap-3 rounded-[22px] p-4 text-white transition hover:brightness-125">
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-lg font-black">My work</span>
+          <span className="block text-[13px] text-[#DCE4F7]">{workCount === 0 ? "Nothing open." : `${workCount} open, soonest first.`}</span>
+        </span>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="shrink-0"><path d="m9 6 6 6-6 6" /></svg>
+      </Link>
 
       {allFlags.length > 0 && (
         <Link href="/attention" className="flex items-center gap-3 rounded-[20px] bg-[#FFF1E0] p-4 text-[#7A3E00] transition hover:brightness-95">

@@ -16,7 +16,7 @@ export async function loadFlags(supabase: Client, brands: Brand[], now = Date.no
   if (ids.length === 0) return result;
 
   await supabase.rpc("ensure_reports");
-  const [content, ads, funds, reports, team, notes, metrics] = await Promise.all([
+  const [content, ads, funds, reports, team, notes, metrics, issues] = await Promise.all([
     supabase.from("content_items").select("*").in("brand_id", ids).eq("is_archived", false),
     supabase.from("ads").select("*").in("brand_id", ids).eq("is_archived", false),
     supabase.from("fund_requests").select("*").in("brand_id", ids).eq("status", "pending"),
@@ -24,6 +24,7 @@ export async function loadFlags(supabase: Client, brands: Brand[], now = Date.no
     supabase.from("brand_roles").select("brand_id, person_id, role_key, title, people(full_name)").in("brand_id", ids).is("ended_at", null),
     supabase.from("update_notes").select("brand_id, created_at").in("brand_id", ids).order("created_at", { ascending: false }).limit(200),
     supabase.from("channel_metrics").select("brand_id, created_at").in("brand_id", ids).order("created_at", { ascending: false }).limit(200),
+    supabase.from("work_issues").select("*").in("brand_id", ids).is("resolved_at", null),
   ]);
 
   const rows = <T,>(r: { data: unknown }) => (r.data ?? []) as T[];
@@ -60,6 +61,7 @@ export async function loadFlags(supabase: Client, brands: Brand[], now = Date.no
         ads: mine(allAds),
         funds: mine(rows<FundRequest>(funds)),
         reports: mine(rows<Report>(reports)),
+        issues: mine(rows<{ brand_id: string; id: string; title: string; note: string | null; raised_at: string; resolved_at: string | null }>(issues)),
         lastActivity,
         now,
       }),

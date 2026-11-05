@@ -70,6 +70,7 @@ export function computeFlags(input: {
   ads: Ad[];
   funds: FundRequest[];
   reports: Report[];
+  issues?: { id: string; title: string; note: string | null; raised_at: string; resolved_at: string | null }[];
   lastActivity: string | null;
   now: number;
 }): Flag[] {
@@ -190,6 +191,22 @@ export function computeFlags(input: {
       escalateTo: r.kind === "monthly" ? ladder.top() : ladder.lead(),
       href: `/brands/${brand.id}/update?tab=reports`,
       since: r.due_at,
+    });
+  }
+
+  // Issues raised on any other work, on the same 24-hour clock as ad issues.
+  for (const issue of input.issues ?? []) {
+    if (issue.resolved_at) continue;
+    const h = hoursSince(issue.raised_at);
+    flags.push({
+      id: `work-issue-${issue.id}`,
+      brandId: brand.id,
+      severity: h >= 24 ? "overdue" : "warning",
+      title: `Issue: ${issue.title}`,
+      detail: `${issue.note ? `${issue.note}. ` : ""}Raised ${Math.floor(h)} h ago${h >= 24 ? ", past the 24 h window" : `; escalate in ${Math.ceil(24 - h)} h if not fixed`}.`,
+      escalateTo: h >= 24 ? ladder.top() : ladder.lead(),
+      href: "/work",
+      since: issue.raised_at,
     });
   }
 

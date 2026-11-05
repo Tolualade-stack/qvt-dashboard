@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/types";
 import { Button, Card, PageTitle, SectionTitle } from "@/components/ui";
@@ -31,6 +32,12 @@ export default async function AccountPage() {
           </dl>
           <p className="mt-2 text-sm text-muted">{ROLE_DESCRIPTIONS[me.role]}</p>
         </Card>
+        {me.role === "admin" && (
+          <Link href="/admin" className="prime-gradient flex min-h-14 items-center justify-between gap-3 rounded-3xl p-5 font-display text-lg font-extrabold text-white">
+            Admin and team
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m9 6 6 6-6 6" /></svg>
+          </Link>
+        )}
         <Card>
           <SectionTitle>Change password</SectionTitle>
           <ChangePasswordForm />

@@ -20,6 +20,7 @@ import { hoursSince, spendSummary, type Ad, type FundRequest } from "@/lib/ads";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
 import { Badge, LiveDot } from "@/components/ui";
 import { WorldPerformance } from "@/components/world-performance";
+import { CampaignList, type CampaignSummary } from "@/components/campaign-list";
 import { CanvaLinkForm } from "./canva-link-form";
 
 // A brand's world, laid out like the PRIME mock-up: banner hero, logo and
@@ -62,6 +63,12 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   ]);
   const metricRows = (metricData ?? []) as ChannelMetric[];
   if (!brandRow) notFound();
+  const [{ data: campaignRows }, { data: spotRows }] = await Promise.all([
+    supabase.from("campaigns").select("id, name, objective, start_date, end_date, status").eq("brand_id", id).eq("is_archived", false).order("launched_at", { ascending: false }),
+    supabase.from("campaign_deliverables").select("group_id, done_qty").eq("brand_id", id).in("group_id", ["tv", "radio"]),
+  ]);
+  const campaigns = (campaignRows ?? []) as CampaignSummary[];
+  const spotsLogged = (ch: string) => (spotRows ?? []).filter((s) => s.group_id === ch).reduce((a, s) => a + s.done_qty, 0);
 
   const brand = brandRow as Brand;
   const flags = (await loadFlags(supabase, [brand])).get(brand.id) ?? [];
@@ -266,6 +273,8 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         </ul>
       </section>
 
+      <CampaignList brandId={brand.id} campaigns={campaigns} theme={theme} canAdd={me.role === "admin"} />
+
       {/* Needs attention: anything late here, with who to escalate to. */}
       {flags.length > 0 && (
         <section className="mt-6">
@@ -305,7 +314,7 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
       {brand.marketing_types.includes("traditional") && (
         <section className="mt-3.5 grid grid-cols-2 gap-2.5">
           {(["tv", "radio"] as const).map((ch) => {
-            const aired = spots[ch];
+            const aired = spots[ch] + spotsLogged(ch);
             const planned = ch === "tv" ? brand.tv_spots_target : brand.radio_spots_target;
             return (
               <div key={ch} className="rounded-[18px] p-3.5" style={{ backgroundColor: theme.soft }}>

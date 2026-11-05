@@ -48,7 +48,7 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
         </Link>
       </header>
       <main className="mx-auto max-w-3xl px-5 py-4">{children}</main>
-      <BottomNav isAdmin={me.role === "admin"} />
+      <BottomNav />
       <IntroSplash />
     </div>
   );

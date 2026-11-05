@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fail, ok, type FormState } from "@/lib/form-state";
-import { CHANNELS } from "@/lib/campaign";
+import { channelId } from "@/lib/plan-match";
 
 // The media plan, strategy and budget lines. Admin only (the database agrees).
 
@@ -32,30 +32,6 @@ export async function savePlanDocuments(brandId: string, _prev: FormState, formD
   if (!data?.length) return fail("Only the Admin can change the plan.");
   refresh(brandId);
   return ok("Plan and strategy saved.");
-}
-
-// Turns a typed channel name ("TikTok", "google ads", "TV") into PRIME's channel id.
-function channelId(name: string): string {
-  const n = name.trim().toLowerCase().replace(/\s+/g, " ");
-  const match = CHANNELS.find((c) => c.label.toLowerCase() === n || c.id === n.replace(/ /g, "_"));
-  if (match) return match.id;
-  // Common ways media plans name channels.
-  const rules: [RegExp, string][] = [
-    [/instagram|\big\b/, "instagram"],
-    [/facebook|\bfb\b|\bmeta\b/, "facebook"],
-    [/tik ?tok/, "tiktok"],
-    [/youtube|\byt\b/, "youtube"],
-    [/google|search|display|pmax|performance max|demand gen/, "google_ads"],
-    [/linkedin/, "linkedin"],
-    [/twitter|^x\b|\bx \(/, "x"],
-    [/\btv\b|television|tvc/, "tv"],
-    [/radio/, "radio"],
-    [/ooh|billboard|outdoor/, "ooh"],
-    [/influenc|kol/, "influencers"],
-    [/\bpr\b|public relations|press/, "pr"],
-    [/activation|experiential|event/, "activations"],
-  ];
-  return rules.find(([re]) => re.test(n))?.[1] ?? (n.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "other");
 }
 
 const money = (v: string) => {

@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 // The floating menu bar at the bottom of every screen. The centre "+" is the
-// main action (create a dashboard). Admin-only items are left out for others.
+// main action: log an update. Admin and Team live inside Me, so the bar keeps
+// five large buttons for everyone; Create a Dashboard is on Home.
 
 const icons: Record<string, ReactNode> = {
   home: <path d="M3 11 12 4l9 7M5 10v10h14V10" />,
@@ -15,10 +16,10 @@ const icons: Record<string, ReactNode> = {
       <path d="M4 6h.01M4 12h.01M4 18h.01" />
     </>
   ),
-  admin: (
+  work: (
     <>
-      <path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3z" />
-      <path d="m9 12 2 2 4-4" />
+      <path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17" />
+      <path d="M11 6h10M11 12h10M11 18h10" />
     </>
   ),
   account: (
@@ -37,20 +38,23 @@ function Icon({ name }: { name: string }) {
   );
 }
 
-export function BottomNav({ isAdmin }: { isAdmin: boolean }) {
+export function BottomNav() {
   const pathname = usePathname();
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/" || pathname.startsWith("/brands");
-    if (href === "/admin") return pathname.startsWith("/admin") || pathname.startsWith("/team");
+    if (href === "/work") return pathname.startsWith("/work") || pathname.startsWith("/check-in");
+    if (href === "/account") return pathname.startsWith("/account") || pathname.startsWith("/admin") || pathname.startsWith("/team");
     return pathname.startsWith(href);
   };
 
-  // Team management lives inside Admin, so the bar keeps five large buttons.
   const left = [
     { href: "/", label: "Home", icon: "home" },
-    { href: "/log", label: "Log", icon: "log" },
+    { href: "/work", label: "My work", icon: "work" },
   ];
-  const right = [...(isAdmin ? [{ href: "/admin", label: "Admin", icon: "admin" }] : []), { href: "/account", label: "My account", icon: "account" }];
+  const right = [
+    { href: "/log", label: "Log", icon: "log" },
+    { href: "/account", label: "My account", icon: "account" },
+  ];
 
   const item = (link: { href: string; label: string; icon: string }) => (
     <Link
@@ -71,17 +75,16 @@ export function BottomNav({ isAdmin }: { isAdmin: boolean }) {
       className="prime-gradient fixed inset-x-4 bottom-4 z-40 mx-auto flex h-[72px] max-w-md items-center justify-around rounded-[26px] px-2 shadow-2xl shadow-black/30"
     >
       {left.map(item)}
-      {isAdmin && (
-        <Link
-          href="/worlds/new"
-          aria-label="Create a dashboard"
-          className="flex size-14 items-center justify-center rounded-[20px] bg-white text-navy shadow-lg transition hover:scale-105"
-        >
-          <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </Link>
-      )}
+      <Link
+        href="/update"
+        aria-label="Add an update"
+        aria-current={pathname === "/update" ? "page" : undefined}
+        className="flex size-14 items-center justify-center rounded-[20px] bg-white text-navy shadow-lg transition hover:scale-105"
+      >
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </Link>
       {right.map(item)}
     </nav>
   );
