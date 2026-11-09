@@ -6,7 +6,8 @@ import { mediaUrl } from "@/lib/media";
 import { CampaignHero } from "@/components/campaign-hero";
 import { AREAS, KPI_METRICS, PANELS, areasFor } from "@/lib/campaign-setup";
 import { compact, summarise, type ChannelMetric } from "@/lib/metrics";
-import { money, spendSummary, type Ad } from "@/lib/ads";
+import { money, type Ad } from "@/lib/ads";
+import { allocate, spendFor } from "@/lib/budget";
 import { STATUS_LABELS, statusTone, type ContentItem } from "@/lib/content";
 import { adTone, AD_STATUS_LABELS } from "@/lib/ads";
 import { REPORT_KIND_LABELS, REPORT_TONES, dueDay, reportState, type CreativeAsset, type Report } from "@/lib/reports";
@@ -14,6 +15,7 @@ import { shortDate } from "@/lib/format";
 import { channelName } from "@/lib/campaign";
 import type { BudgetLine } from "@/lib/budget";
 import { setCampaignStatus } from "../actions";
+import { DeliverableEdit } from "./deliverable-edit";
 import { deleteCampaign } from "../../remove-actions";
 import { RemoveButton } from "@/components/remove-button";
 
@@ -24,7 +26,7 @@ type Deliverable = { id: string; group_id: string; title: string; detail: string
 export default async function CampaignPage({ params, searchParams }: PageProps<"/brands/[id]/campaigns/[campaignId]">) {
   const { id, campaignId } = await params;
   const launched = (await searchParams).launched === "1";
-  const { me, brand, theme, supabase } = await loadWorld(id);
+  const { me, brand, theme, supabase, canEdit } = await loadWorld(id);
   const isAdmin = me.role === "admin";
 
   const [{ data: campaign }, { data: team }, { data: areaRows }, { data: peopleRows }, { data: workRows }, { data: contentRows }, { data: adRows }, { data: reportRows }, { data: assetRows }, { data: metricRows }, { data: lineRows }] = await Promise.all([
@@ -57,7 +59,7 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
   const values = summarise(metrics, null).values as Record<string, number | undefined>;
   const spotsAired = deliverables.filter((d) => ["tv", "radio"].includes(d.group_id)).reduce((a, d) => a + d.done_qty, 0);
   const actual = (metric: string): string | null => {
-    if (metric === "ad_spend") return spendSummary(ads);
+    if (metric === "ad_spend") return spendFor(allocate(lines, ads), null);
     if (metric === "spots_aired") return String(spotsAired);
     const v = values[metric];
     return v === undefined ? null : compact(v);
@@ -130,7 +132,9 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
             <ProgressRow label="Creative assets" done={assetsDeployed} planned={campaign.creative_assets_target} unit="deployed" theme={theme} who={personName(coverOf.get("assets") ?? null) ?? leadName} />
           )}
           {deliverables.map((d) => (
-            <ProgressRow key={d.id} label={d.title} detail={d.detail} done={d.done_qty} planned={d.planned_qty} unit={d.unit} theme={theme} who={personName(coverOf.get(d.area) ?? null) ?? leadName} />
+            <ProgressRow key={d.id} label={d.title} detail={d.detail} done={d.done_qty} planned={d.planned_qty} unit={d.unit} theme={theme} who={personName(coverOf.get(d.area) ?? null) ?? leadName}>
+              {canEdit && <DeliverableEdit id={d.id} brandId={id} planned={d.planned_qty} done={d.done_qty} unit={d.unit} />}
+            </ProgressRow>
           ))}
         </ul>
       </section>
@@ -263,7 +267,7 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function ProgressRow({ label, detail, done, planned, unit, theme, who }: { label: string; detail?: string | null; done: number; planned: number | null; unit: string; theme: { main: string; soft: string; ink: string }; who: string }) {
+function ProgressRow({ label, detail, done, planned, unit, theme, who, children }: { children?: React.ReactNode; label: string; detail?: string | null; done: number; planned: number | null; unit: string; theme: { main: string; soft: string; ink: string }; who: string }) {
   return (
     <li className="rounded-[18px] p-3.5" style={{ backgroundColor: theme.soft }}>
       <div className="flex items-baseline justify-between gap-2">
@@ -274,6 +278,7 @@ function ProgressRow({ label, detail, done, planned, unit, theme, who }: { label
         <div className="mt-1.5 h-1.5 rounded-full bg-white"><div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, (done / planned) * 100)}%`, backgroundColor: theme.main }} /></div>
       ) : null}
       <div className="mt-1 text-xs text-muted">{detail ? `${detail} · ` : ""}{who}</div>
+      {children}
     </li>
   );
 }

@@ -261,13 +261,13 @@ export function buildWork(input: WorkInput): WorkItem[] {
         const issue = openIssue("numbers", c.id);
         items.push({
           ...head,
-          title: "Weekly numbers",
+          title: "Weekly numbers and spend",
           where: place(head.brandName, c.name, `${c.channels.length} channels`),
           due: null,
           dueLabel: last ? `Last ${shortDate(last)}` : "None yet",
           status: issue ? "Issue open" : "Weekly",
           statusTone: issue ? RED : GREY,
-          chips: [{ action: "numbers:add", label: "Add numbers", tone: "main" }, ...issueChips("numbers", c.id)],
+          chips: [{ action: "numbers:add", label: "Update now", tone: "main" }, ...issueChips("numbers", c.id)],
           openHref: `/brands/${c.brand_id}/update?tab=numbers`,
           issueOpen: issue,
         });

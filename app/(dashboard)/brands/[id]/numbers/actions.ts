@@ -41,3 +41,20 @@ export async function addNumbers(brandId: string, _prev: FormState, formData: Fo
   revalidatePath("/");
   return ok("Numbers saved. The world's tiles update straight away.");
 }
+
+// The weekly spend update. The database checks, line by line, that this person
+// covers ads or numbers for it, and only ever changes the spend.
+export async function saveSpend(brandId: string, lines: { id: string; spent: string }[]): Promise<{ ok: boolean; message: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("record_spend", { p_lines: lines });
+  if (error) return { ok: false, message: error.message };
+  const saved = Number(data ?? 0);
+  if (saved === 0) return { ok: false, message: "You can't update spend here. It may be someone else's area." };
+  await supabase.from("update_notes").insert({ brand_id: brandId, note: `Weekly spend updated on ${saved} media plan ${saved === 1 ? "line" : "lines"}.` });
+  revalidatePath(`/brands/${brandId}`, "layout");
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    message: saved < lines.length ? `${saved} saved. ${lines.length - saved} belong to someone else's area and weren't changed.` : "Spend saved. The budget spread is up to date.",
+  };
+}

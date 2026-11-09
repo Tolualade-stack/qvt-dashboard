@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import readXlsxFile from "read-excel-file/browser";
@@ -54,28 +54,29 @@ const SAVE_STEPS = ["The campaign", "What's included", "The team"];
 export function CampaignWizard({ brandId, brandName, theme, banner, logo, people: startPeople, myPersonId, defaults, existing, editing }: Props) {
   const router = useRouter();
   const e = editing?.fields;
-  const [step, setStep] = useState(0);
+  // Setup is remembered on this device until launch, so a reload loses nothing.
+  const draftKey = `prime-campaign-draft-${brandId}`;
+  const [draftState] = useState<Record<string, unknown>>(() => (editing ? {} : readDraft(draftKey)));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each value is checked by the state it seeds
+  const d = draftState as Record<string, any>;
+  const restored = !editing && Object.keys(d).length > 0;
+  const [step, setStep] = useState<number>(d.step ?? (0));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   // Step 1
-  const [name, setName] = useState(e?.name ?? "");
-  const [objective, setObjective] = useState(e?.objective ?? "");
-  const [start, setStart] = useState(e?.start_date ?? "");
-  const [end, setEnd] = useState(e?.end_date ?? "");
-  const [kpis, setKpis] = useState<Record<string, string>>(
-    Object.fromEntries((e?.kpis ?? []).map((k) => [k.metric, k.target == null ? "" : k.target.toLocaleString("en-GB")])),
-  );
+  const [name, setName] = useState<string>(d.name ?? (e?.name ?? ""));
+  const [objective, setObjective] = useState<string>(d.objective ?? (e?.objective ?? ""));
+  const [start, setStart] = useState<string>(d.start ?? (e?.start_date ?? ""));
+  const [end, setEnd] = useState<string>(d.end ?? (e?.end_date ?? ""));
+  const [kpis, setKpis] = useState<Record<string, string>>(d.kpis ?? (Object.fromEntries((e?.kpis ?? []).map((k) => [k.metric, k.target == null ? "" : k.target.toLocaleString("en-GB")]))));
 
   // Step 2
-  const [types, setTypes] = useState<string[]>(e?.marketing_types ?? ["digital"]);
-  const [selections, setSelections] = useState<Record<string, string[]>>(e?.selections ?? {});
-  const [quantities, setQuantities] = useState<Record<string, string>>(
-    Object.fromEntries(Object.entries(e?.quantities ?? {}).map(([k, v]) => [k, v == null ? "" : String(v)])),
-  );
+  const [types, setTypes] = useState<string[]>(d.types ?? (e?.marketing_types ?? ["digital"]));
+  const [selections, setSelections] = useState<Record<string, string[]>>(d.selections ?? (e?.selections ?? {}));
+  const [quantities, setQuantities] = useState<Record<string, string>>(d.quantities ?? (Object.fromEntries(Object.entries(e?.quantities ?? {}).map(([k, v]) => [k, v == null ? "" : String(v)]))));
   const [closed, setClosed] = useState<string[]>([]);
-  const [extraOptions, setExtraOptions] = useState<Record<string, string[]>>(
-    () => {
+  const [extraOptions, setExtraOptions] = useState<Record<string, string[]>>(d.extraOptions ?? (() => {
       // Anything saved earlier that isn't a standard option still shows.
       const extras: Record<string, string[]> = {};
       for (const panel of PANELS) for (const g of panel.groups) {
@@ -83,24 +84,23 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
         if (custom.length) extras[g.id] = custom;
       }
       return extras;
-    },
-  );
-  const [contentMin, setContentMin] = useState(String(e?.content_target_min ?? defaults.contentMin ?? ""));
-  const [contentMax, setContentMax] = useState(String(e?.content_target_max ?? defaults.contentMax ?? ""));
-  const [assetsTarget, setAssetsTarget] = useState(String(e?.creative_assets_target ?? defaults.assets ?? ""));
-  const [reporting, setReporting] = useState(e?.reporting ?? defaults.reporting ?? REPORTING_OPTIONS[0]);
-  const [tier, setTier] = useState(e?.tier ?? defaults.tier);
-  const [inCycle, setInCycle] = useState(e?.in_monthly_cycle ?? true);
-  const [planUrl, setPlanUrl] = useState(e?.media_plan_url ?? "");
-  const [strategyUrl, setStrategyUrl] = useState(e?.strategy_url ?? "");
+    }));
+  const [contentMin, setContentMin] = useState<string>(d.contentMin ?? (String(e?.content_target_min ?? defaults.contentMin ?? "")));
+  const [contentMax, setContentMax] = useState<string>(d.contentMax ?? (String(e?.content_target_max ?? defaults.contentMax ?? "")));
+  const [assetsTarget, setAssetsTarget] = useState<string>(d.assetsTarget ?? (String(e?.creative_assets_target ?? defaults.assets ?? "")));
+  const [reporting, setReporting] = useState<string>(d.reporting ?? (e?.reporting ?? defaults.reporting ?? REPORTING_OPTIONS[0]));
+  const [tier, setTier] = useState<"heavy" | "medium" | "low">(d.tier ?? (e?.tier ?? defaults.tier));
+  const [inCycle, setInCycle] = useState<boolean>(d.inCycle ?? (e?.in_monthly_cycle ?? true));
+  const [planUrl, setPlanUrl] = useState<string>(d.planUrl ?? (e?.media_plan_url ?? ""));
+  const [strategyUrl, setStrategyUrl] = useState<string>(d.strategyUrl ?? (e?.strategy_url ?? ""));
   const [planFile, setPlanFile] = useState<File | null>(null);
   const [strategyFile, setStrategyFile] = useState<File | null>(null);
-  const [planRead, setPlanRead] = useState<{ file: string } | null>(null);
-  const [planRows, setPlanRows] = useState<PlanRow[]>([]);
+  const [planRead, setPlanRead] = useState<{ file: string } | null>(d.planRead ?? (null));
+  const [planRows, setPlanRows] = useState<PlanRow[]>(d.planRows ?? ([]));
   const [showRows, setShowRows] = useState(true);
   const [planNote, setPlanNote] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
-  const [manualLines, setManualLines] = useState<BudgetDraft[]>([]);
+  const [manualLines, setManualLines] = useState<BudgetDraft[]>(d.manualLines ?? ([]));
   // Budget lines: the plan's (minus any left out), then any added by hand.
   const lines = useMemo<BudgetDraft[]>(
     () => [
@@ -112,12 +112,12 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
   const planSummary = summarisePlan(planRows);
 
   // Step 3
-  const [people, setPeople] = useState(startPeople);
-  const [lead, setLead] = useState(e?.account_lead_person_id ?? myPersonId ?? "");
-  const [managers, setManagers] = useState<string[]>(e?.team ?? []);
-  const [areas, setAreas] = useState<Record<string, string>>(Object.fromEntries((e?.areas ?? []).map((a) => [a.area, a.person_id])));
-  const [leaveCover, setLeaveCover] = useState(e?.leave_cover_person_id ?? defaults.leaveCoverId ?? "");
-  const [alerts, setAlerts] = useState<string[]>(e?.email_alerts ?? EMAIL_ALERTS.map(([id]) => id));
+  const [people, setPeople] = useState<WizardPerson[]>(d.people ?? (startPeople));
+  const [lead, setLead] = useState<string>(d.lead ?? (e?.account_lead_person_id ?? myPersonId ?? ""));
+  const [managers, setManagers] = useState<string[]>(d.managers ?? (e?.team ?? []));
+  const [areas, setAreas] = useState<Record<string, string>>(d.areas ?? (Object.fromEntries((e?.areas ?? []).map((a) => [a.area, a.person_id]))));
+  const [leaveCover, setLeaveCover] = useState<string>(d.leaveCover ?? (e?.leave_cover_person_id ?? defaults.leaveCoverId ?? ""));
+  const [alerts, setAlerts] = useState<string[]>(d.alerts ?? (e?.email_alerts ?? EMAIL_ALERTS.map(([id]) => id)));
   const [addingName, setAddingName] = useState("");
   const [addingEmail, setAddingEmail] = useState("");
   const [loginEmail, setLoginEmail] = useState<Record<string, string>>({});
@@ -125,11 +125,11 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
   const [teamProblem, setTeamProblem] = useState<string | null>(null);
 
   // Step 4
-  const [unticked, setUnticked] = useState<string[]>([]);
-  const [handContent, setHandContent] = useState<{ title: string; date: string }[]>([]);
+  const [unticked, setUnticked] = useState<string[]>(d.unticked ?? ([]));
+  const [handContent, setHandContent] = useState<{ title: string; date: string }[]>(d.handContent ?? ([]));
   const [contentTitle, setContentTitle] = useState("");
   const [contentDate, setContentDate] = useState("");
-  const [attachExisting, setAttachExisting] = useState(true);
+  const [attachExisting, setAttachExisting] = useState<boolean>(d.attachExisting ?? (true));
 
   const steps = editing ? SAVE_STEPS : STEP_LABELS;
   const personName = (id: string) => people.find((p) => p.id === id)?.name ?? "Someone";
@@ -226,6 +226,16 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
   const [lineAmount, setLineAmount] = useState("");
   const [lineCurrency, setLineCurrency] = useState<Currency>("NGN");
   const [pasteRows, setPasteRows] = useState("");
+
+  useEffect(() => {
+    if (editing || (!name.trim() && step === 0)) return;
+    const snapshot = { step, name, objective, start, end, kpis, types, selections, quantities, extraOptions, contentMin, contentMax, assetsTarget, reporting, tier, inCycle, planUrl, strategyUrl, planRead, planRows, manualLines, people, lead, managers, areas, leaveCover, alerts, unticked, handContent, attachExisting };
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(snapshot));
+    } catch {
+      // Private browsing or full storage: setup still works, it just isn't remembered.
+    }
+  });
   const lineTotals = (["NGN", "USD"] as Currency[])
     .map((c) => [c, lines.filter((l) => l.currency === c).reduce((a, l) => a + l.amount, 0)] as const)
     .filter(([, n]) => n > 0)
@@ -417,6 +427,9 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
         };
         const result = await launchCampaign(payload);
         if (!result.ok || !result.id) return setError(result.message);
+        try {
+          localStorage.removeItem(draftKey);
+        } catch {}
         router.push(`/brands/${brandId}/campaigns/${result.id}?launched=1`);
       } catch (err) {
         setError((err as Error).message);
@@ -447,6 +460,24 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
         label={`Step ${step + 1} of ${steps.length} · ${steps[step]}`}
         back={back}
       />
+      {restored && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-2xl p-3 text-sm" style={{ backgroundColor: theme.soft }}>
+          <span>Picked up where you left off{planFile === null && planRead ? ". Upload the plan file again if you want it kept" : ""}.</span>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.removeItem(draftKey);
+              } catch {}
+              window.location.reload();
+            }}
+            className="min-h-10 rounded-full bg-white px-3 text-[13px] font-bold"
+            style={{ color: theme.ink }}
+          >
+            Start again
+          </button>
+        </div>
+      )}
       <div aria-hidden="true" className="flex gap-1.5">
         {steps.map((s, i) => (
           <span key={s} className="h-[5px] flex-1 rounded-full" style={{ backgroundColor: i <= step ? theme.main : theme.soft }} />
@@ -1015,6 +1046,15 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
 }
 
 const groupLabel = (id: string) => ALL_GROUPS.find((g) => g.id === id)?.label ?? id;
+
+function readDraft(key: string): Record<string, unknown> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) ?? "null");
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
 
 function BackIcon() {
   return (

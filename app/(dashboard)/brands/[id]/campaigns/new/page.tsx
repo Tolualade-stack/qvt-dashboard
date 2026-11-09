@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { loadWorld } from "@/lib/world";
 import { mediaUrl } from "@/lib/media";
 import { loadWizardPeople } from "@/lib/campaign-wizard-data";
-import { CampaignWizard } from "../campaign-wizard";
+import { CampaignWizardLoader } from "../campaign-wizard-loader";
 
 export const metadata: Metadata = { title: "New campaign · PRIME" };
 
@@ -23,7 +23,7 @@ export default async function NewCampaignPage({ params }: PageProps<"/brands/[id
   ]);
 
   return (
-    <CampaignWizard
+    <CampaignWizardLoader
       brandId={id}
       brandName={brand.name}
       theme={theme}

@@ -8,7 +8,7 @@ import { tint, worldTheme } from "@/lib/colour";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { describeChange, whoDidIt } from "@/lib/history";
 import { CHANNELS, MARKETING_TYPES, channelName, labelFor } from "@/lib/campaign";
-import { allocate, type BudgetLine } from "@/lib/budget";
+import { allocate, spendFor, type BudgetLine } from "@/lib/budget";
 import { BudgetSpread } from "@/components/budget-spread";
 import { FlagList } from "@/components/flag-list";
 import { loadFlags } from "@/lib/attention";
@@ -16,7 +16,7 @@ import { lagosMonth, monthCounts, type ContentItem } from "@/lib/content";
 import { REPORT_KIND_LABELS, REPORT_TONES, dueDay, reportState, type CreativeAsset, type Report } from "@/lib/reports";
 import { spotsThisMonth, summarise, type ChannelMetric } from "@/lib/metrics";
 import type { UpdateNote } from "@/lib/notes";
-import { hoursSince, spendSummary, type Ad, type FundRequest } from "@/lib/ads";
+import { hoursSince, type Ad, type FundRequest } from "@/lib/ads";
 import { TIER_LABELS, type AuditEntry, type Brand, type BrandRole, type Person } from "@/lib/types";
 import { Badge, LiveDot } from "@/components/ui";
 import { WorldPerformance } from "@/components/world-performance";
@@ -82,8 +82,10 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   // Ads: spend per channel (never mixing ₦ and $), and the warnings that matter.
   const ads = (adRows ?? []) as Ad[];
   const pendingFunds = (fundRows ?? []) as FundRequest[];
-  const spendByChannel: Record<string, string | null> = { all: spendSummary(ads) };
-  for (const channelId of brand.channels) spendByChannel[channelId] = spendSummary(ads.filter((a) => a.channel === channelId));
+  const budgetLines = (budgetRows ?? []) as BudgetLine[];
+  const spread = allocate(budgetLines, ads);
+  const spendByChannel: Record<string, string | null> = { all: spendFor(spread, null) };
+  for (const channelId of brand.channels) spendByChannel[channelId] = spendFor(spread, channelId);
   const overview = {
     live: ads.filter((a) => a.status === "live").length,
     paused: ads.filter((a) => a.status === "paused").length,
@@ -153,8 +155,6 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   ).length;
 
   const spots = spotsThisMonth(metricRows, lagosMonth().firstDay);
-  const budgetLines = (budgetRows ?? []) as BudgetLine[];
-  const spread = allocate(budgetLines, ads);
   const hasPlan = !!(brand.media_plan_url || brand.media_plan_path || brand.strategy_url || brand.strategy_path);
 
   // The next report still to send, for the chip by the logo.

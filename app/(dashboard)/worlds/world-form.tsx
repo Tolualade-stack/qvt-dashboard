@@ -6,12 +6,14 @@ import { createClient } from "@/lib/supabase/browser";
 import { detectColours, prepareImage } from "@/lib/image-tools";
 import { worldTheme } from "@/lib/colour";
 import { MEDIA_BUCKET } from "@/lib/media";
-import { CHANNELS, INDUSTRIES, MARKETING_TYPES, REPORTING_OPTIONS, ROLES_NEEDED, labelFor, type MarketingType } from "@/lib/campaign";
+import { INDUSTRIES } from "@/lib/campaign";
 import { fail, type FormState } from "@/lib/form-state";
 import type { Brand } from "@/lib/types";
 import { Button, Field, FormMessage, inputClass } from "@/components/ui";
 
-// "Create a dashboard" (and "Edit world"): four short steps on one page.
+// "Create a dashboard" (and "Edit world"): the brand itself, in two short steps.
+// What a campaign includes (channels, targets, reports, team) is set up per
+// campaign instead, from the World page.
 // Every step stays in the same form, so nothing is lost when going back.
 // Images are shrunk in the browser, uploaded straight to storage, and the
 // logo's colours are read on the spot.
@@ -21,29 +23,13 @@ type Props = {
   bannerUrl?: string | null;
   logoUrl?: string | null;
   people: { id: string; name: string }[];
-  assignedRoles: string[];             // role names already held on this brand
+  assignedRoles?: string[];            // no longer used here (roles are on Team)
 };
 
-const STEPS = ["Identity", "Brand profile", "Campaign", "Targets"];
+const STEPS = ["Identity", "Brand profile"];
 const DEFAULT_COLOUR = "#0B1F4B";
 
-function Chip({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={`inline-flex min-h-11 items-center gap-1.5 rounded-2xl border px-4 text-sm font-semibold transition ${on ? "border-navy bg-navy text-white" : "border-line bg-white text-ink hover:bg-mist"}`}
-    >
-      {on && (
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5 9-10" /></svg>
-      )}
-      {children}
-    </button>
-  );
-}
-
-export function WorldForm({ brand, bannerUrl, logoUrl, people, assignedRoles }: Props) {
+export function WorldForm({ brand, bannerUrl, logoUrl, people }: Props) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState(brand?.name ?? "");
   const [bannerPreview, setBannerPreview] = useState<string | null>(bannerUrl ?? null);
@@ -55,13 +41,9 @@ export function WorldForm({ brand, bannerUrl, logoUrl, people, assignedRoles }: 
   const [reading, setReading] = useState(false);
   const [products, setProducts] = useState<string[]>(brand?.products ?? []);
   const [productDraft, setProductDraft] = useState("");
-  const [types, setTypes] = useState<string[]>(brand?.marketing_types ?? ["digital"]);
-  const [channels, setChannels] = useState<string[]>(brand?.channels ?? []);
   const [localError, setLocalError] = useState<FormState>(null);
 
   const theme = worldTheme(colour);
-  const toggle = (list: string[], set: (v: string[]) => void, id: string) =>
-    set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   async function onBanner(file: File | undefined) {
     if (!file) return;
@@ -128,14 +110,13 @@ export function WorldForm({ brand, bannerUrl, logoUrl, people, assignedRoles }: 
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const neededRoles = [...new Set(types.flatMap((t) => ROLES_NEEDED[t as MarketingType] ?? []))];
 
   return (
     <form action={formAction} className="space-y-5">
       {/* Progress */}
       <div>
         <div className="text-xs font-semibold tracking-[0.15em] text-muted uppercase">
-          Step {step + 1} of 4 · {STEPS[step]}
+          Step {step + 1} of {STEPS.length} · {STEPS[step]}
         </div>
         <div aria-hidden="true" className="mt-2 flex gap-1.5">
           {STEPS.map((s, i) => (
@@ -150,8 +131,6 @@ export function WorldForm({ brand, bannerUrl, logoUrl, people, assignedRoles }: 
       <input type="hidden" name="banner_path" value={brand?.banner_path ?? ""} />
       <input type="hidden" name="logo_path" value={brand?.logo_path ?? ""} />
       {products.map((p) => <input key={p} type="hidden" name="products" value={p} />)}
-      {types.map((t) => <input key={t} type="hidden" name="marketing_types" value={t} />)}
-      {channels.map((c) => <input key={c} type="hidden" name="channels" value={c} />)}
 
       {/* Step 1: Identity */}
       <section className={step === 0 ? "space-y-5" : "hidden"}>
@@ -295,104 +274,17 @@ export function WorldForm({ brand, bannerUrl, logoUrl, people, assignedRoles }: 
             <Button type="button" variant="secondary" onClick={addProduct}>Add</Button>
           </div>
         </div>
-      </section>
-
-      {/* Step 3: Campaign */}
-      <section className={step === 2 ? "space-y-5" : "hidden"}>
-        <h1 className="font-display text-3xl leading-none font-black text-navy">What does the campaign include?</h1>
-        <div className="flex flex-wrap gap-2">
-          {MARKETING_TYPES.map((t) => (
-            <Chip key={t.id} on={types.includes(t.id)} onClick={() => toggle(types, setTypes, t.id)}>{t.label}</Chip>
-          ))}
-        </div>
-
-        {types.includes("digital") && (
-          <div>
-            <h2 className="mb-2 text-sm font-bold">Digital channels</h2>
-            <div className="flex flex-wrap gap-2">
-              {CHANNELS.map((c) => (
-                <Chip key={c.id} on={channels.includes(c.id)} onClick={() => toggle(channels, setChannels, c.id)}>{c.label}</Chip>
-              ))}
-            </div>
-            {channels.length > 0 && (
-              <p className="mt-2 text-xs text-muted">
-                {channels.length} channels · each creative asset is posted on all of them. Ad formats:{" "}
-                {channels.map((id) => `${labelFor(CHANNELS, id)} (${CHANNELS.find((c) => c.id === id)!.formats.join(", ")})`).join("; ")}.
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="rounded-3xl border border-line p-4">
-          <h2 className="text-sm font-bold">Roles this campaign needs</h2>
-          <ul className="mt-2 divide-y divide-line">
-            {neededRoles.map((role) => (
-              <li key={role} className="flex items-center justify-between gap-2 py-2.5 text-sm">
-                <span className="font-semibold">{role}</span>
-                {assignedRoles.includes(role) ? (
-                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">Filled</span>
-                ) : (
-                  <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800">Assign on Team</span>
-                )}
-              </li>
-            ))}
-          </ul>
-          {neededRoles.length === 0 && <p className="text-sm text-muted">Tick a marketing type above.</p>}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Process level">
-            <select name="tier" defaultValue={brand?.tier ?? "medium"} className={inputClass}>
-              <option value="heavy">Heavy</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-          </Field>
-          <label className="flex items-end gap-2 pb-3 text-sm font-semibold">
-            <input type="checkbox" name="in_execution_cycle" defaultChecked={brand?.in_execution_cycle ?? true} className="size-5 accent-navy" />
-            In the monthly cycle
-          </label>
-        </div>
-      </section>
-
-      {/* Step 4: Targets */}
-      <section className={step === 3 ? "space-y-4" : "hidden"}>
-        <h1 className="font-display text-3xl leading-none font-black text-navy">Targets</h1>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Content pieces a month, from">
-            <input name="content_min" type="number" min={0} inputMode="numeric" defaultValue={brand?.monthly_content_target_min ?? 8} className={inputClass} />
-          </Field>
-          <Field label="to">
-            <input name="content_max" type="number" min={0} inputMode="numeric" defaultValue={brand?.monthly_content_target_max ?? 10} className={inputClass} />
-          </Field>
-          <Field label="Creative assets this cycle">
-            <input name="creative_assets_target" type="number" min={0} inputMode="numeric" defaultValue={brand?.creative_assets_target ?? ""} className={inputClass} />
-          </Field>
-        </div>
-        {types.includes("traditional") && (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="TV spots planned">
-              <input name="tv_spots_target" type="number" min={0} inputMode="numeric" defaultValue={brand?.tv_spots_target ?? ""} className={inputClass} />
-            </Field>
-            <Field label="Radio spots planned">
-              <input name="radio_spots_target" type="number" min={0} inputMode="numeric" defaultValue={brand?.radio_spots_target ?? ""} className={inputClass} />
-            </Field>
-          </div>
-        )}
-        <Field label="Client reports">
-          <select name="reporting" defaultValue={brand?.reporting ?? REPORTING_OPTIONS[0]} className={inputClass}>
-            {[...new Set([...(brand?.reporting ? [brand.reporting] : []), ...REPORTING_OPTIONS])].map((r) => <option key={r}>{r}</option>)}
-          </select>
-        </Field>
-        <Field label="Leave cover" hint="Who can edit this world while Leave Mode is on.">
+        <Field label="Leave cover" hint="Who can update this brand while you're on leave and Leave Mode is on.">
           <select name="leave_cover_person_id" defaultValue={brand?.leave_cover_person_id ?? ""} className={inputClass}>
             <option value="">Nobody yet</option>
             {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </Field>
-        <div className="rounded-3xl border-2 border-dashed border-line p-4 text-sm text-muted">
-          <span className="font-semibold text-ink">Media plan</span> · coming later: upload the plan so stations, spot durations and billboard locations are tracked one by one.
-        </div>
+        {!brand && (
+          <p className="rounded-2xl bg-mist p-4 text-sm text-muted">
+            Next, start a campaign from the brand&apos;s world: that&apos;s where its channels, targets, reports and team go.
+          </p>
+        )}
       </section>
 
       <FormMessage state={localError ?? state} />
@@ -401,7 +293,7 @@ export function WorldForm({ brand, bannerUrl, logoUrl, people, assignedRoles }: 
         {step > 0 && (
           <Button type="button" variant="secondary" onClick={() => setStep(step - 1)} className="min-h-14 flex-1">Back</Button>
         )}
-        {step < 3 ? (
+        {step < STEPS.length - 1 ? (
           <Button type="button" onClick={next} className="min-h-14 flex-[2] text-base">Continue</Button>
         ) : (
           <Button type="submit" disabled={pending} className="min-h-14 flex-[2] text-base">

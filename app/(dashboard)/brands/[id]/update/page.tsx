@@ -18,6 +18,8 @@ import type { CreativeAsset, Report } from "@/lib/reports";
 import { METRIC_FIELDS, SOURCE_NAMES, compact, type ChannelMetric } from "@/lib/metrics";
 import { lagosDate, shortDate } from "@/lib/format";
 import { NumbersForm } from "../numbers/numbers-form";
+import { SpendForm } from "../numbers/spend-form";
+import type { BudgetLine } from "@/lib/budget";
 
 export const metadata: Metadata = { title: "Update · PRIME" };
 
@@ -36,7 +38,7 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
   // Make sure the regular reports up to now (and the next one) exist.
   if (tab === "reports") await supabase.rpc("ensure_reports");
 
-  const [{ data: rows }, { data: noteRows }, { data: adRows }, { data: fundRows }, { data: reportRows }, { data: assetRows }, { data: metricRows }] = await Promise.all([
+  const [{ data: rows }, { data: noteRows }, { data: adRows }, { data: fundRows }, { data: reportRows }, { data: assetRows }, { data: metricRows }, { data: lineRows }, { data: campaignRows }] = await Promise.all([
     supabase
       .from("content_items")
       .select("*")
@@ -62,7 +64,23 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
     tab === "numbers"
       ? supabase.from("channel_metrics").select("*").eq("brand_id", id).order("created_at", { ascending: false }).limit(12)
       : Promise.resolve({ data: [] }),
+    tab === "numbers" ? supabase.from("budget_lines").select("*").eq("brand_id", id).order("sort_order") : Promise.resolve({ data: [] }),
+    tab === "numbers" ? supabase.from("campaigns").select("id, name, status").eq("brand_id", id) : Promise.resolve({ data: [] }),
   ]);
+  // Lines of live campaigns, and lines not in any campaign.
+  const campaignName = new Map(((campaignRows ?? []) as { id: string; name: string; status: string }[]).map((c) => [c.id, c]));
+  const spendLines = ((lineRows ?? []) as BudgetLine[])
+    .filter((l) => !l.campaign_id || campaignName.get(l.campaign_id)?.status === "live")
+    .map((l) => ({
+      id: l.id,
+      channel: l.channel,
+      format: l.format,
+      planned: Number(l.planned_amount),
+      currency: l.currency,
+      spent: l.spend_to_date == null ? null : Number(l.spend_to_date),
+      updatedAt: l.spend_updated_at ?? null,
+      campaign: l.campaign_id ? (campaignName.get(l.campaign_id)?.name ?? null) : null,
+    }));
   const metrics = (metricRows ?? []) as ChannelMetric[];
   const reports = (reportRows ?? []) as Report[];
   const openReports = reports.filter((r) => !r.sent_at);
@@ -105,7 +123,7 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
           ["ads", "Ads", `/brands/${id}/update?tab=ads`],
           ["assets", "Assets", `/brands/${id}/update?tab=assets`],
           ["reports", "Reports", `/brands/${id}/update?tab=reports`],
-          ["numbers", "Numbers", `/brands/${id}/update?tab=numbers`],
+          ["numbers", "Numbers & spend", `/brands/${id}/update?tab=numbers`],
           ["note", "Note", `/brands/${id}/update?tab=note`],
         ].map(([key, label, href]) => (
           <Link
@@ -122,6 +140,8 @@ export default async function UpdatePage({ params, searchParams }: PageProps<"/b
 
       {tab === "numbers" ? (
         <>
+          {canEdit && <SpendForm brandId={id} lines={spendLines} theme={theme} />}
+          <h2 className="font-display text-xl font-black">Channel numbers</h2>
           {canEdit ? (
             <NumbersForm brandId={id} channels={platforms} theme={theme} defaultStart={lagosDate(-6)} defaultEnd={lagosDate(0)} />
           ) : (

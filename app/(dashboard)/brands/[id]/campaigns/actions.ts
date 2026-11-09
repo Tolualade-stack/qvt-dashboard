@@ -6,12 +6,36 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { draftDeliverables, type CampaignFields, type CampaignPayload } from "@/lib/campaign-setup";
+import { MARKETING_TYPES, labelFor } from "@/lib/campaign";
 
 // Campaign setup. Admin only; the database checks this again.
 
 function refresh(brandId: string) {
   revalidatePath(`/brands/${brandId}`, "layout");
   revalidatePath("/", "layout");
+}
+
+// The brand-level settings the World page, report schedule and flags read.
+async function syncBrand(supabase: Awaited<ReturnType<typeof createClient>>, fields: CampaignFields) {
+  const { data: brand } = await supabase.from("brands").select("channels, marketing_types").eq("id", fields.brand_id).single();
+  if (!brand) return;
+  const types = [...new Set([...brand.marketing_types, ...fields.marketing_types])];
+  await supabase
+    .from("brands")
+    .update({
+      channels: [...new Set([...brand.channels, ...fields.channels])],
+      marketing_types: types,
+      scope: types.map((t) => labelFor(MARKETING_TYPES, t)).join(" + ") || "Campaign scope not set yet.",
+      tier: fields.tier,
+      in_execution_cycle: fields.in_monthly_cycle,
+      ...(fields.reporting ? { reporting: fields.reporting } : {}),
+      ...(fields.content_target_min != null ? { monthly_content_target_min: fields.content_target_min, monthly_content_target_max: fields.content_target_max ?? fields.content_target_min } : {}),
+      ...(fields.creative_assets_target != null ? { creative_assets_target: fields.creative_assets_target } : {}),
+      ...(fields.leave_cover_person_id ? { leave_cover_person_id: fields.leave_cover_person_id } : {}),
+      ...(fields.quantities.tv != null ? { tv_spots_target: fields.quantities.tv } : {}),
+      ...(fields.quantities.radio != null ? { radio_spots_target: fields.quantities.radio } : {}),
+    })
+    .eq("id", fields.brand_id);
 }
 
 const problem = (fields: CampaignFields) => {
@@ -28,6 +52,7 @@ export async function launchCampaign(payload: CampaignPayload): Promise<{ ok: bo
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("launch_campaign", { p: payload });
   if (error) return { ok: false, message: error.message };
+  await syncBrand(supabase, payload);
   refresh(payload.brand_id);
   return { ok: true, message: "Campaign launched.", id: data as string };
 }
@@ -91,17 +116,7 @@ export async function saveCampaign(campaignId: string, fields: CampaignFields): 
     if (workError) return { ok: false, message: workError.message };
   }
 
-  // Keep the World page's channels in step.
-  const { data: brand } = await supabase.from("brands").select("channels, marketing_types").eq("id", fields.brand_id).single();
-  if (brand) {
-    await supabase
-      .from("brands")
-      .update({
-        channels: [...new Set([...brand.channels, ...fields.channels])],
-        marketing_types: [...new Set([...brand.marketing_types, ...fields.marketing_types])],
-      })
-      .eq("id", fields.brand_id);
-  }
+  await syncBrand(supabase, fields);
 
   refresh(fields.brand_id);
   return { ok: true, message: "Saved." };
@@ -183,4 +198,22 @@ export async function setCampaignStatus(campaignId: string, brandId: string, sta
   const { error } = await supabase.from("campaigns").update({ status }).eq("id", campaignId);
   if (error) throw new Error(error.message);
   refresh(brandId);
+}
+
+// Corrects a counted item's planned and done figures. Whoever covers its area
+// can do this (the database checks).
+export async function fixDeliverable(id: string, brandId: string, planned: string, done: string): Promise<{ ok: boolean; message: string }> {
+  const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[,\s]/g, "")));
+  const plan = num(planned);
+  const count = num(done);
+  if ((plan !== null && !(plan >= 0)) || count === null || !(count >= 0)) return { ok: false, message: "Use whole numbers, e.g. 12." };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("campaign_deliverables")
+    .update({ planned_qty: plan === null ? null : Math.round(plan), done_qty: Math.round(count) })
+    .eq("id", id)
+    .select("id");
+  if (!data?.length) return { ok: false, message: "You can't change this. It may be someone else's area." };
+  refresh(brandId);
+  return { ok: true, message: "Saved." };
 }
