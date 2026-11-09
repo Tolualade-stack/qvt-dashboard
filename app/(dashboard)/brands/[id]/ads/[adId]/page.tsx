@@ -9,6 +9,8 @@ import type { AuditEntry } from "@/lib/types";
 import { HistoryList } from "@/components/history-list";
 import { Card, SectionTitle } from "@/components/ui";
 import { AdForm } from "../ad-form";
+import { RemoveButton } from "@/components/remove-button";
+import { removeWork } from "../../remove-actions";
 
 export const metadata: Metadata = { title: "Ad · PRIME" };
 
@@ -108,6 +110,9 @@ export default async function AdPage({ params }: PageProps<"/brands/[id]/ads/[ad
         <section>
           <h2 className="mb-2 font-display text-xl font-black">Edit details</h2>
           <AdForm brandId={id} channels={channels} people={people} ad={ad} />
+          <div className="mt-4">
+            <RemoveButton label="Remove this ad" action={removeWork.bind(null, "ad", ad.id, id)} goTo={`/brands/${id}/update?tab=ads`} />
+          </div>
         </section>
       )}
     </div>

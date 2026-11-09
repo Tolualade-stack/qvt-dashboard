@@ -102,66 +102,92 @@ const FORMAT_ALIASES: [RegExp, string][] = [
   [/promoted/i, "Promoted post"],
 ];
 
-export type PlanMatch = {
-  types: string[];
-  selections: Record<string, string[]>;
-  lines: { channel: string; format: string; amount: number; currency: Currency }[];
-  checks: string[];   // lines PRIME couldn't place with confidence
-  ticked: number;
+export type Place = { group: string; option: string };
+
+// One line of the plan, and where PRIME put it. The person can change it.
+export type PlanRow = {
+  label: string;           // as the plan wrote it, e.g. "Meta (FB/IG) · Reels"
+  format: string;
+  amount: number;
+  currency: Currency;
+  qty: number | null;      // how many spots, sites, units... if the plan says
+  places: Place[];         // the ticks it stands for (Meta = Instagram and Facebook)
+  channel: string;         // the budget channel it counts against
+  skipped: boolean;        // "leave this line out"
 };
 
-export function matchPlan(found: FoundLine[]): PlanMatch {
+export type PlanMatch = {
+  rows: PlanRow[];
+  types: string[];
+  selections: Record<string, string[]>;
+  quantities: Record<string, string>;
+  ticked: number;
+  unplaced: number;
+};
+
+// Where a line goes for one tick.
+function place(line: FoundLine): { places: Place[]; channel: string } {
+  const text = `${line.channel} ${line.format}`;
+  const channel = channelId(line.channel);
+  const digital = CHANNELS.find((c) => c.id === channel);
+  if (!digital) {
+    const rule = NON_DIGITAL.find(([re]) => re.test(text));
+    return rule ? { places: [{ group: rule[1], option: rule[2] }], channel: rule[3] } : { places: [], channel };
+  }
+  // "Meta" or "FB/IG" means both Facebook and Instagram.
+  const family = /\bmeta\b/i.test(line.channel) || (/\bfb\b|facebook/i.test(line.channel) && /\big\b|instagram/i.test(line.channel)) ? ["instagram", "facebook"] : [digital.id as string];
+  const label = line.format.trim();
+  const alias = label ? FORMAT_ALIASES.find(([re]) => re.test(label))?.[1] : undefined;
+  const places: Place[] = [];
+  for (const id of family) {
+    const options = CHANNELS.find((c) => c.id === id)!.formats as readonly string[];
+    const option = options.find((o) => o.toLowerCase() === label.toLowerCase()) ?? (alias && options.includes(alias) ? alias : undefined);
+    if (option) places.push({ group: id, option });
+  }
+  return { places, channel };
+}
+
+export function readPlanRows(found: FoundLine[]): PlanRow[] {
+  return found.map((line) => ({
+    label: [line.channel, line.format].filter(Boolean).join(" · "),
+    format: line.format.trim(),
+    amount: line.amount,
+    currency: line.currency,
+    qty: line.qty ?? null,
+    skipped: false,
+    ...place(line),
+  }));
+}
+
+// The ticks, types and "how many" figures the rows add up to.
+export function summarisePlan(rows: PlanRow[]): PlanMatch {
   const selections: Record<string, string[]> = {};
   const types = new Set<string>();
-  const checks: string[] = [];
-  const tick = (group: string, option: string) => {
-    selections[group] = [...new Set([...(selections[group] ?? []), option])];
-    const type = ALL_GROUPS.find((g) => g.id === group)?.type;
-    if (type) types.add(type);
-  };
-
-  const lines = found.map((line) => {
-    const text = `${line.channel} ${line.format}`;
-    const channel = channelId(line.channel);
-    const digital = CHANNELS.find((c) => c.id === channel);
-    let budgetChannel = channel;
-
-    if (digital) {
-      // "Meta" or "FB/IG" means both Facebook and Instagram.
-      const family = /\bmeta\b/i.test(line.channel) || (/\bfb\b|facebook/i.test(line.channel) && /\big\b|instagram/i.test(line.channel)) ? ["instagram", "facebook"] : [digital.id as string];
-      const label = line.format.trim();
-      const alias = label ? FORMAT_ALIASES.find(([re]) => re.test(label))?.[1] : undefined;
-      let placed = false;
-      for (const id of family) {
-        const options = CHANNELS.find((c) => c.id === id)!.formats as readonly string[];
-        const exact = options.find((o) => o.toLowerCase() === label.toLowerCase());
-        const option = exact ?? (alias && options.includes(alias) ? alias : undefined);
-        if (option) {
-          tick(id, option);
-          placed = true;
-        }
-      }
-      if (!placed) {
-        types.add("digital");
-        checks.push(label ? `"${label}" on ${digital.label} isn't one of its usual ad formats. Tick the closest, or add it.` : `${digital.label} has no ad format in the plan. Tick the ones you'll run.`);
-      }
-    } else {
-      const rule = NON_DIGITAL.find(([re]) => re.test(text));
-      if (rule) {
-        tick(rule[1], rule[2]);
-        budgetChannel = rule[3];
-      } else {
-        checks.push(`Couldn't place "${text.trim()}". Tick where it belongs.`);
-      }
+  const totals: Record<string, number> = {};
+  for (const row of rows) {
+    if (row.skipped) continue;
+    for (const p of row.places) {
+      selections[p.group] = [...new Set([...(selections[p.group] ?? []), p.option])];
+      const group = ALL_GROUPS.find((g) => g.id === p.group);
+      if (group) types.add(group.type);
     }
-    return { channel: budgetChannel, format: line.format.trim(), amount: line.amount, currency: line.currency };
-  });
-
+    // Counts go to the first tick's group, for non-digital work only.
+    const first = row.places[0];
+    if (first && row.qty != null && ALL_GROUPS.find((g) => g.id === first.group)?.qtyLabel) {
+      totals[first.group] = (totals[first.group] ?? 0) + row.qty;
+    }
+  }
+  const live = rows.filter((r) => !r.skipped);
   return {
+    rows,
     types: [...types],
     selections,
-    lines,
-    checks,
+    quantities: Object.fromEntries(Object.entries(totals).map(([k, v]) => [k, String(v)])),
     ticked: Object.values(selections).reduce((a, l) => a + l.length, 0),
+    unplaced: live.filter((r) => r.places.length === 0).length,
   };
+}
+
+export function matchPlan(found: FoundLine[]): PlanMatch {
+  return summarisePlan(readPlanRows(found));
 }

@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { worldTheme } from "@/lib/colour";
+import { currentTime } from "@/lib/format";
 import type { WorkChip, WorkGroup, WorkItem } from "@/lib/work-items";
 import { quickUpdate, undoUpdate, type Undo } from "./actions";
 
-type Done = { key: string; title: string; brandId: string; message: string; undo?: Undo };
+type Done = { key: string; title: string; brandId: string; message: string; undo?: Undo; saving?: boolean };
 
 // My work: tap an item, tap what happened. Saved straight away, with an Undo.
 export function WorkList({ groups, readOnly }: { groups: WorkGroup[]; readOnly: boolean }) {
@@ -18,6 +19,7 @@ export function WorkList({ groups, readOnly }: { groups: WorkGroup[]; readOnly: 
   const [currency, setCurrency] = useState<"NGN" | "USD">("NGN");
   const [done, setDone] = useState<Done[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string[]>([]); // items tapped, shown as done while they save
   const [pending, startTransition] = useTransition();
 
   function tap(item: WorkItem, chip: WorkChip) {
@@ -26,6 +28,15 @@ export function WorkList({ groups, readOnly }: { groups: WorkGroup[]; readOnly: 
       setFundsFor(item.key);
       return;
     }
+    // Show it as done straight away; the save finishes in the background.
+    const entryKey = `${item.key}-${currentTime()}`;
+    const sent = { note, amount, currency };
+    setDone((list) => [{ key: entryKey, title: item.title, brandId: item.brandId, message: `${chip.label}. Saving…`, saving: true }, ...list]);
+    setSaving((list) => [...list, item.key]);
+    setOpen(null);
+    setNote("");
+    setAmount("");
+    setFundsFor(null);
     startTransition(async () => {
       const result = await quickUpdate({
         kind: item.kind,
@@ -34,19 +45,15 @@ export function WorkList({ groups, readOnly }: { groups: WorkGroup[]; readOnly: 
         campaignId: item.campaignId,
         title: item.title,
         action: chip.action,
-        note,
-        amount,
-        currency,
+        ...sent,
       });
+      setSaving((list) => list.filter((k) => k !== item.key));
       if (!result.ok) {
-        setProblem(result.message);
+        setDone((list) => list.filter((d) => d.key !== entryKey));
+        setProblem(`${item.title}: ${result.message}`);
         return;
       }
-      setDone((list) => [{ key: `${item.key}-${Date.now()}`, title: item.title, brandId: item.brandId, message: result.message, undo: result.undo }, ...list]);
-      setOpen(null);
-      setNote("");
-      setAmount("");
-      setFundsFor(null);
+      setDone((list) => list.map((d) => (d.key === entryKey ? { ...d, message: result.message, undo: result.undo, saving: false } : d)));
     });
   }
 
@@ -73,7 +80,7 @@ export function WorkList({ groups, readOnly }: { groups: WorkGroup[]; readOnly: 
                   <div className="text-sm font-bold">{d.title}</div>
                   <div className="text-xs leading-snug text-[#17633A]">{d.message}</div>
                 </div>
-                {d.undo && (
+                {d.undo && !d.saving && (
                   <button type="button" disabled={pending} onClick={() => undo(d)} className="min-h-11 shrink-0 rounded-xl bg-white px-3 text-[13px] font-semibold">Undo</button>
                 )}
               </div>
@@ -86,7 +93,7 @@ export function WorkList({ groups, readOnly }: { groups: WorkGroup[]; readOnly: 
         <section key={group.label}>
           <h2 className={`mb-2 text-xs font-bold tracking-[0.12em] uppercase ${group.label === "Late" ? "text-[#A11A1A]" : "text-muted"}`}>{group.label}</h2>
           <div className="space-y-2.5">
-            {group.items.map((item) => {
+            {group.items.filter((item) => !saving.includes(item.key)).map((item) => {
               const theme = worldTheme(item.colour);
               const isOpen = open === item.key && !readOnly;
               return (

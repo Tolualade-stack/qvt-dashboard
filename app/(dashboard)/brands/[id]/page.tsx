@@ -22,6 +22,8 @@ import { Badge, LiveDot } from "@/components/ui";
 import { WorldPerformance } from "@/components/world-performance";
 import { CampaignList, type CampaignSummary } from "@/components/campaign-list";
 import { CanvaLinkForm } from "./canva-link-form";
+import { RemoveButton } from "@/components/remove-button";
+import { removeCanvaLink } from "./remove-actions";
 
 // A brand's world, laid out like the PRIME mock-up: banner hero, logo and
 // profile, performance, creative assets, content progress and the latest updates.
@@ -44,6 +46,8 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     { data: assetRows },
     { data: metricData },
     { data: budgetRows },
+    { data: campaignRows },
+    { data: spotRows },
   ] = await Promise.all([
     supabase.from("brands").select("*").eq("id", id).maybeSingle(),
     supabase.from("brand_roles").select("*").eq("brand_id", id).is("ended_at", null).order("sort_order"),
@@ -60,18 +64,16 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     supabase.from("creative_assets").select("status, deployed_at").eq("brand_id", id).eq("is_archived", false),
     supabase.from("channel_metrics").select("*").eq("brand_id", id),
     supabase.from("budget_lines").select("*").eq("brand_id", id).order("sort_order"),
+    supabase.from("campaigns").select("id, name, objective, start_date, end_date, status").eq("brand_id", id).eq("is_archived", false).order("launched_at", { ascending: false }),
+    supabase.from("campaign_deliverables").select("group_id, done_qty").eq("brand_id", id).in("group_id", ["tv", "radio"]).eq("is_archived", false),
   ]);
   const metricRows = (metricData ?? []) as ChannelMetric[];
   if (!brandRow) notFound();
-  const [{ data: campaignRows }, { data: spotRows }] = await Promise.all([
-    supabase.from("campaigns").select("id, name, objective, start_date, end_date, status").eq("brand_id", id).eq("is_archived", false).order("launched_at", { ascending: false }),
-    supabase.from("campaign_deliverables").select("group_id, done_qty").eq("brand_id", id).in("group_id", ["tv", "radio"]),
-  ]);
   const campaigns = (campaignRows ?? []) as CampaignSummary[];
   const spotsLogged = (ch: string) => (spotRows ?? []).filter((s) => s.group_id === ch).reduce((a, s) => a + s.done_qty, 0);
 
   const brand = brandRow as Brand;
-  const flags = (await loadFlags(supabase, [brand])).get(brand.id) ?? [];
+  const flagsPromise = loadFlags(supabase, [brand]);
   const roles = (roleRows ?? []) as BrandRole[];
   const people = new Map(((peopleRows ?? []) as Person[]).map((p) => [p.id, p]));
   const content = (contentRows ?? []) as ContentItem[];
@@ -92,9 +94,13 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
 
   // "Latest in this world": changes to the brand and to its content, newest first.
   const contentIds = content.map((c) => c.id);
-  const { data: contentHistory } = contentIds.length
-    ? await supabase.from("audit_log").select("*").eq("table_name", "content_items").in("row_id", contentIds).order("changed_at", { ascending: false }).limit(8)
-    : { data: [] };
+  const [flagMap, { data: contentHistory }] = await Promise.all([
+    flagsPromise,
+    contentIds.length
+      ? supabase.from("audit_log").select("*").eq("table_name", "content_items").in("row_id", contentIds).order("changed_at", { ascending: false }).limit(8)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const flags = flagMap.get(brand.id) ?? [];
   // Notes join the same feed, shown as "Viche noted: …".
   const noteEntries: AuditEntry[] = ((noteRows ?? []) as UpdateNote[]).map((n, i) => ({
     id: -1 - i,
@@ -447,6 +453,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           </a>
         ) : (
           <p className="mt-1 text-sm text-muted">No calendar linked yet.</p>
+        )}
+        {canEdit && brand.canva_calendar_url && (
+          <div className="mt-2"><RemoveButton label="Remove link" action={removeCanvaLink.bind(null, brand.id)} /></div>
         )}
         {canEdit && <CanvaLinkForm brandId={brand.id} currentUrl={brand.canva_calendar_url ?? ""} />}
       </section>

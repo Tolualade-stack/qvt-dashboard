@@ -14,6 +14,8 @@ import { shortDate } from "@/lib/format";
 import { channelName } from "@/lib/campaign";
 import type { BudgetLine } from "@/lib/budget";
 import { setCampaignStatus } from "../actions";
+import { deleteCampaign } from "../../remove-actions";
+import { RemoveButton } from "@/components/remove-button";
 
 export const metadata: Metadata = { title: "Campaign · PRIME" };
 
@@ -101,6 +103,7 @@ export default async function CampaignPage({ params, searchParams }: PageProps<"
                 {campaign.status === "live" ? "End campaign" : "Make it live again"}
               </button>
             </form>
+            <RemoveButton label="Delete campaign" confirm="Tap again: delete it and its work" action={deleteCampaign.bind(null, campaignId, id)} goTo={`/brands/${id}`} />
           </div>
         )}
       </section>

@@ -3,7 +3,7 @@
 // money column, then reads the rows under it. Everything found is shown to the
 // person to confirm before anything is saved.
 
-export type FoundLine = { channel: string; format: string; amount: number; currency: "NGN" | "USD" };
+export type FoundLine = { channel: string; format: string; amount: number; currency: "NGN" | "USD"; qty: number | null };
 export type FoundPlan = { sheet: string; lines: FoundLine[]; columns: { channel: string; format: string | null; amount: string } } | null;
 
 type Cell = string | number | boolean | Date | null | undefined;
@@ -12,6 +12,8 @@ const CHANNEL = /channel|platform|media(?!\s*plan)|medium|vehicle|station|networ
 const FORMAT = /format|ad\s*type|placement|buy\s*type|objective|type/i;
 const AMOUNT = /budget|amount|cost|spend|investment|net|gross|naira|₦|\$|usd|ngn|total/i;
 const CURRENCY = /currency|curr\b/i;
+// How many: spots, insertions, sites, units, vehicles, posts...
+const QTY = /spots?|insertions?|units?|sites?|qty|quantity|no\.?\s*of|number of|slots?|boards?|vehicles?|buses|posts?|count/i;
 
 const text = (c: Cell) => (c instanceof Date ? c.toISOString().slice(0, 10) : String(c ?? "")).trim();
 
@@ -33,6 +35,7 @@ function findInSheet(name: string, rows: Cell[][]): FoundPlan {
     if (channelCol < 0 || amountCol === undefined) continue;
     const formatCol = header.findIndex((v, i) => FORMAT.test(v) && i !== channelCol && i !== amountCol);
     const currencyCol = header.findIndex((v) => CURRENCY.test(v));
+    const qtyCol = header.findIndex((v, i) => QTY.test(v) && !/cost|rate|budget|amount|price/i.test(v) && ![channelCol, amountCol, formatCol].includes(i));
     const headerSaysUsd = /\$|usd|dollar/i.test(header[amountCol]);
 
     const lines: FoundLine[] = [];
@@ -50,6 +53,7 @@ function findInSheet(name: string, rows: Cell[][]): FoundPlan {
         format: formatCol >= 0 ? text(row[formatCol]) : "",
         amount,
         currency: /\$|usd|dollar/i.test(currencyText) || (headerSaysUsd && !/₦|ngn|naira/i.test(currencyText)) ? "USD" : "NGN",
+        qty: qtyCol >= 0 ? parseMoney(row[qtyCol]) : null,
       });
     }
     if (lines.length) {

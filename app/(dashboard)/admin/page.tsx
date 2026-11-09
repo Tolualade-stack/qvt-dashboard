@@ -1,3 +1,4 @@
+import { DeleteWorldForm } from "./delete-world-form";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
@@ -69,7 +70,7 @@ export default async function AdminPage() {
           <SectionTitle>Brands &amp; Leave Mode</SectionTitle>
           <p className="mb-3 text-sm text-muted">
             Turn Leave Mode on when you go on leave: the brand&apos;s leave cover can then edit it until you turn it
-            off. Archive a brand to take it off Home; its data and history are kept.
+            off. Archive a brand to take it off Home; its data and history are kept. Delete removes it and everything in it for good.
           </p>
           <ul className="space-y-3">
             {brands.map((brand) => (
@@ -97,6 +98,7 @@ export default async function AdminPage() {
                       <input type="hidden" name="archived" value={String(!brand.is_archived)} />
                       <Button variant="secondary" className="min-h-10 px-4">{brand.is_archived ? "Restore" : "Archive"}</Button>
                     </form>
+                    <DeleteWorldForm brandId={brand.id} brandName={brand.name} />
                   </div>
                 </div>
                 <div className="mt-2">

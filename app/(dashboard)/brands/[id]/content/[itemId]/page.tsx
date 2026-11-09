@@ -10,6 +10,8 @@ import { NoteList } from "@/components/note-list";
 import type { UpdateNote } from "@/lib/notes";
 import { Card, SectionTitle } from "@/components/ui";
 import { ContentForm } from "../content-form";
+import { RemoveButton } from "@/components/remove-button";
+import { removeWork } from "../../remove-actions";
 
 export const metadata: Metadata = { title: "Content piece · PRIME" };
 
@@ -91,6 +93,9 @@ export default async function ContentItemPage({ params }: PageProps<"/brands/[id
         <section>
           <h2 className="mb-2 font-display text-xl font-black">Edit details</h2>
           <ContentForm brandId={id} platforms={platforms} people={people} defaultNeedsApproval={item.needs_approval} item={item} />
+          <div className="mt-4">
+            <RemoveButton label="Remove this piece" action={removeWork.bind(null, "content", item.id, id)} goTo={`/brands/${id}/update`} />
+          </div>
         </section>
       )}
     </div>

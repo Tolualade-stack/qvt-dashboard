@@ -218,6 +218,16 @@ export function draftDeliverables(types: string[], selections: Record<string, st
   }));
 }
 
+// The budget channel a tick counts against: a digital channel is its own; the
+// rest share one per kind (all OOH spend on "OOH", etc.).
+export function budgetChannelFor(group: string): string {
+  const shared: Record<string, string> = {
+    billboards: "ooh", transit: "ooh", street: "ooh", place: "ooh",
+    activations: "activations", tiers: "influencers", kolcontent: "influencers", prwork: "pr",
+  };
+  return shared[group] ?? group;
+}
+
 export function toCount(value: string | undefined): number | null {
   const n = Number(String(value ?? "").replace(/[,\s]/g, ""));
   return String(value ?? "").trim() !== "" && Number.isFinite(n) && n >= 0 ? Math.round(n) : null;

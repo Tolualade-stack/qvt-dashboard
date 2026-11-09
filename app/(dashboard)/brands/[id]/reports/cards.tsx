@@ -2,6 +2,8 @@
 
 import { useActionState, useOptimistic, useState, useTransition } from "react";
 import { addAsset, addReport, advanceAsset, markReportSent, saveReportLink } from "./actions";
+import { removeReport, removeWork } from "../remove-actions";
+import { RemoveButton } from "@/components/remove-button";
 import {
   ASSET_STATUS_LABELS,
   ASSET_TYPES,
@@ -80,6 +82,9 @@ export function ReportCard({ report, theme, canEdit }: { report: Report; theme: 
           Not sent yet? Undo
         </button>
       )}
+      {canEdit && report.kind === "other" && (
+        <div className="mt-2"><RemoveButton action={removeReport.bind(null, report.id, report.brand_id)} /></div>
+      )}
       <FormMessage state={message ?? linkState} />
     </article>
   );
@@ -155,6 +160,7 @@ export function AssetCard({ asset, theme, ownerName, canEdit }: { asset: Creativ
               Mark as {ASSET_STATUS_LABELS[next]}
             </button>
           )}
+          {canEdit && <div><RemoveButton action={removeWork.bind(null, "asset", asset.id, asset.brand_id)} /></div>}
           <FormMessage state={message} />
         </div>
       </div>

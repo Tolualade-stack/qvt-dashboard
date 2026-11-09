@@ -9,8 +9,10 @@ import { CampaignHero } from "@/components/campaign-hero";
 import { Field, inputClass } from "@/components/ui";
 import { budgetChannels, channelName, MARKETING_TYPES, REPORTING_OPTIONS } from "@/lib/campaign";
 import {
+  ALL_GROUPS,
   AREAS,
   EMAIL_ALERTS,
+  budgetChannelFor,
   KPI_METRICS,
   PANELS,
   areasFor,
@@ -24,7 +26,7 @@ import {
   type CampaignPayload,
 } from "@/lib/campaign-setup";
 import { findBudgetLines, parseCsv, parseMoney } from "@/lib/plan-import";
-import { channelId, matchPlan } from "@/lib/plan-match";
+import { channelId, readPlanRows, summarisePlan, type PlanRow } from "@/lib/plan-match";
 import { money, type Currency } from "@/lib/ads";
 import { dueDay } from "@/lib/reports";
 import { currentTime, shortDate } from "@/lib/format";
@@ -93,11 +95,21 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
   const [strategyUrl, setStrategyUrl] = useState(e?.strategy_url ?? "");
   const [planFile, setPlanFile] = useState<File | null>(null);
   const [strategyFile, setStrategyFile] = useState<File | null>(null);
-  const [planRead, setPlanRead] = useState<{ file: string; ticked: number; lines: number } | null>(null);
+  const [planRead, setPlanRead] = useState<{ file: string } | null>(null);
+  const [planRows, setPlanRows] = useState<PlanRow[]>([]);
+  const [showRows, setShowRows] = useState(true);
   const [planNote, setPlanNote] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
-  const [checks, setChecks] = useState<string[]>([]);
-  const [lines, setLines] = useState<BudgetDraft[]>([]);
+  const [manualLines, setManualLines] = useState<BudgetDraft[]>([]);
+  // Budget lines: the plan's (minus any left out), then any added by hand.
+  const lines = useMemo<BudgetDraft[]>(
+    () => [
+      ...planRows.filter((r) => !r.skipped).map((r) => ({ channel: r.channel, format: r.format, amount: r.amount, currency: r.currency })),
+      ...manualLines,
+    ],
+    [planRows, manualLines],
+  );
+  const planSummary = summarisePlan(planRows);
 
   // Step 3
   const [people, setPeople] = useState(startPeople);
@@ -152,16 +164,18 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
         setPlanNote("The file is kept with the campaign, but PRIME couldn't find a channel column and a money column in it. Please tick what applies below.");
         return;
       }
-      const match = matchPlan(found.lines);
+      const rows = readPlanRows(found.lines);
+      const match = summarisePlan(rows);
       setTypes((current) => [...new Set([...current, ...match.types])]);
       setSelections((current) => {
         const merged = { ...current };
         for (const [group, options] of Object.entries(match.selections)) merged[group] = [...new Set([...(merged[group] ?? []), ...options])];
         return merged;
       });
-      setLines(match.lines);
-      setChecks(match.checks);
-      setPlanRead({ file: file.name, ticked: match.ticked, lines: match.lines.length });
+      setQuantities((current) => ({ ...current, ...match.quantities }));
+      setPlanRows(rows);
+      setShowRows(true);
+      setPlanRead({ file: file.name });
     } catch {
       setPlanNote("The file is kept with the campaign, but PRIME couldn't read it. Please tick what applies below.");
     } finally {
@@ -173,9 +187,36 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
     setPlanRead(null);
     setPlanFile(null);
     setSelections({});
-    setLines([]);
-    setChecks([]);
+    setQuantities({});
+    setPlanRows([]);
     setPlanNote(null);
+  }
+
+  // Moves one plan line somewhere else ("group|option"), leaves it unplaced (""),
+  // or leaves it out ("skip"). The ticks below follow.
+  function placeRow(index: number, value: string) {
+    const old = planRows[index];
+    let next: PlanRow;
+    if (value === "skip") next = { ...old, skipped: true };
+    else if (value === "") next = { ...old, skipped: false, places: [] };
+    else {
+      const [group, option] = value.split("|");
+      next = { ...old, skipped: false, places: [{ group, option }], channel: budgetChannelFor(group) };
+    }
+    const rows = planRows.map((r, i) => (i === index ? next : r));
+    const stillUsed = (group: string, option: string) =>
+      rows.some((r) => !r.skipped && r.places.some((p) => p.group === group && p.option === option));
+    const updated = { ...selections };
+    for (const p of old.places) if (!stillUsed(p.group, p.option)) updated[p.group] = (updated[p.group] ?? []).filter((o) => o !== p.option);
+    const newTypes = new Set(types);
+    for (const p of next.skipped ? [] : next.places) {
+      updated[p.group] = [...new Set([...(updated[p.group] ?? []), p.option])];
+      const type = ALL_GROUPS.find((g) => g.id === p.group)?.type;
+      if (type) newTypes.add(type);
+    }
+    setTypes([...newTypes]);
+    setSelections(updated);
+    setPlanRows(rows);
   }
 
   // ------------------------------------------------------------- budget lines
@@ -191,11 +232,18 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
     .map(([c, n]) => money(n, c))
     .join(" + ");
 
+  // A plan line is left out (and its ticks follow); a hand-added one is removed.
+  function removeLine(index: number) {
+    const planIndexes = planRows.map((r, i) => (r.skipped ? -1 : i)).filter((i) => i >= 0);
+    if (index < planIndexes.length) placeRow(planIndexes[index], "skip");
+    else setManualLines(manualLines.filter((_, j) => j !== index - planIndexes.length));
+  }
+
   function addLine() {
     const amount = parseMoney(lineAmount);
     const channel = lineChannel || budgetOptions[0]?.id;
     if (!channel || !amount) return;
-    setLines([...lines, { channel, format: lineFormat.trim(), amount, currency: lineCurrency }]);
+    setManualLines([...manualLines, { channel, format: lineFormat.trim(), amount, currency: lineCurrency }]);
     setLineFormat("");
     setLineAmount("");
   }
@@ -213,7 +261,7 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
         currency: /\$|usd|dollar/i.test(raw) ? "USD" : "NGN",
       });
     }
-    setLines([...lines, ...added]);
+    setManualLines([...manualLines, ...added]);
     setPasteRows("");
   }
 
@@ -427,7 +475,7 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
           <section className="rounded-[22px] p-4" style={{ backgroundColor: theme.soft }}>
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-[15px] font-bold">KPIs</h2>
-              <span className="text-xs text-muted">Tap to choose, up to 5</span>
+              <span className="text-xs text-muted">Tap to choose, up to 7</span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {KPI_METRICS.map(([id, label]) => (
@@ -440,7 +488,7 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
                       const rest = { ...kpis };
                       delete rest[id];
                       setKpis(rest);
-                    } else if (Object.keys(kpis).length < 5) setKpis({ ...kpis, [id]: "" });
+                    } else if (Object.keys(kpis).length < 7) setKpis({ ...kpis, [id]: "" });
                   }}
                   className="min-h-11 rounded-[14px] border-[1.5px] px-3.5 text-sm font-semibold"
                   style={chip(id in kpis)}
@@ -479,7 +527,7 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
             <section className="rounded-3xl p-[18px]" style={{ backgroundColor: theme.soft }}>
               <div className="text-[11px] font-bold tracking-[0.15em]" style={{ color: theme.ink }}>OPTIONAL</div>
               <h2 className="mt-1 font-display text-2xl leading-tight font-black" style={{ color: theme.ink }}>Have a media plan?</h2>
-              <p className="mt-1 mb-3 text-sm leading-relaxed text-muted">Upload it and PRIME ticks what it recognises across every channel, for you to check. No plan? Just tick below.</p>
+              <p className="mt-1 mb-3 text-sm leading-relaxed text-muted">Upload it and PRIME goes through it line by line, shows you where each line goes, and ticks the boxes for you. No plan? Just tick below.</p>
               <label
                 className="flex min-h-[54px] cursor-pointer items-center justify-center rounded-[18px] font-display text-[17px] font-extrabold"
                 style={{ background: `linear-gradient(135deg, ${theme.main} 0%, ${theme.deep} 100%)`, color: theme.onMain }}
@@ -493,27 +541,76 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
           )}
 
           {planRead && (
-            <section className="rounded-3xl p-[18px]" style={{ background: `linear-gradient(140deg, ${theme.main} 0%, ${theme.deep} 100%)`, color: theme.onMain }}>
-              <div className="text-xs font-bold tracking-[0.12em] opacity-85">READ FROM YOUR MEDIA PLAN</div>
-              <div className="mt-1 font-display text-[26px] leading-tight font-black">
-                {planRead.ticked} ticked, {planRead.lines} budget {planRead.lines === 1 ? "line" : "lines"}
+            <section className="overflow-hidden rounded-3xl border-[1.5px]" style={{ borderColor: theme.main }}>
+              <div className="p-[18px]" style={{ background: `linear-gradient(140deg, ${theme.main} 0%, ${theme.deep} 100%)`, color: theme.onMain }}>
+                <div className="text-xs font-bold tracking-[0.12em] opacity-85">YOUR MEDIA PLAN</div>
+                <div className="mt-1 font-display text-[26px] leading-tight font-black">
+                  {planRows.filter((r) => !r.skipped).length} lines read{planSummary.unplaced ? `, ${planSummary.unplaced} need you` : ", all placed"}
+                </div>
+                <div className="mt-1 text-[13px] opacity-90">{planRead.file}</div>
               </div>
-              <div className="mt-1 text-[13px] opacity-85">{planRead.file}. Change anything below.</div>
-              {checks.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {checks.map((c) => (
-                    <div key={c} className="flex items-center gap-2.5 rounded-2xl bg-white py-2.5 pr-2.5 pl-3 text-black">
-                      <div className="min-w-0 flex-1 text-[13px] leading-snug"><b>Please check:</b> {c}</div>
-                      <button type="button" onClick={() => setChecks(checks.filter((x) => x !== c))} className="min-h-11 shrink-0 rounded-xl px-3 text-[13px] font-bold" style={{ backgroundColor: theme.soft, color: theme.ink }}>
-                        Done
-                      </button>
-                    </div>
-                  ))}
+              {showRows ? (
+                <div className="bg-white p-3.5">
+                  <p className="mb-2.5 text-[13px] leading-snug text-muted">
+                    Each line of your plan, and where PRIME put it. If one is wrong, choose the right place. The ticks further down follow your choices.
+                  </p>
+                  <ul className="space-y-2">
+                    {planRows.map((row, i) => {
+                      const value = row.skipped ? "skip" : row.places[0] ? `${row.places[0].group}|${row.places[0].option}` : "";
+                      const placed = !row.skipped && row.places.length > 0;
+                      return (
+                        <li key={i} className={`rounded-2xl p-3 ${row.skipped ? "bg-mist opacity-60" : placed ? "" : "bg-[#FFF7E8]"}`} style={placed ? { backgroundColor: theme.soft } : undefined}>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="min-w-0 text-sm font-bold">{row.label}</span>
+                            <span className="shrink-0 text-[13px] font-semibold">{money(row.amount, row.currency)}</span>
+                          </div>
+                          {row.qty != null && <div className="text-xs text-muted">{row.qty.toLocaleString("en-GB")} planned</div>}
+                          <div className="mt-1.5 text-xs font-semibold" style={{ color: placed ? theme.ink : "#8A3B00" }}>
+                            {row.skipped
+                              ? "Left out"
+                              : placed
+                                ? `✓ Goes to ${row.places.map((p) => `${groupLabel(p.group)}: ${p.option}`).join(" and ")}`
+                                : "PRIME isn't sure where this goes. Choose below."}
+                          </div>
+                          <select
+                            aria-label={`Where "${row.label}" goes`}
+                            value={value}
+                            onChange={(ev) => placeRow(i, ev.target.value)}
+                            className="mt-1.5 min-h-11 w-full rounded-xl border bg-white px-2 text-sm"
+                            style={{ borderColor: placed ? theme.soft : "#F5D9A6" }}
+                          >
+                            <option value="">Not sure yet (keep the budget, tick nothing)</option>
+                            {PANELS.map((panel) => (
+                              <optgroup key={panel.type} label={panel.heading}>
+                                {panel.groups.flatMap((g) =>
+                                  g.options.map((o) => (
+                                    <option key={`${g.id}|${o}`} value={`${g.id}|${o}`}>{g.label}: {o}</option>
+                                  )),
+                                )}
+                              </optgroup>
+                            ))}
+                            <option value="skip">Leave this line out</option>
+                          </select>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <button type="button" onClick={() => setShowRows(false)} className="mt-3 min-h-12 w-full rounded-2xl text-sm font-bold" style={{ backgroundColor: theme.main, color: theme.onMain }}>
+                    Looks right
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white p-3.5">
+                  <button type="button" onClick={() => setShowRows(true)} className="min-h-11 rounded-xl border-[1.5px] px-3 text-[13px] font-bold" style={{ borderColor: theme.main, color: theme.ink }}>
+                    See the lines again
+                  </button>
                 </div>
               )}
-              <button type="button" onClick={clearPlan} className="mt-3 min-h-11 w-full rounded-[14px] border-[1.5px] border-white/50 text-[13px] font-semibold">
-                Clear this and tick by hand
-              </button>
+              <div className="border-t bg-white px-3.5 pb-2" style={{ borderColor: theme.soft }}>
+                <button type="button" onClick={clearPlan} className="min-h-11 text-[13px] font-semibold text-muted underline">
+                  Clear the plan and tick by hand
+                </button>
+              </div>
             </section>
           )}
 
@@ -647,7 +744,7 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
                       <div className="text-sm font-semibold">{channelName(l.channel)}{l.format ? ` · ${l.format}` : ""}</div>
                       <div className="text-xs text-muted">{money(l.amount, l.currency)} planned</div>
                     </div>
-                    <button type="button" aria-label={`Remove ${channelName(l.channel)} ${l.format}`} onClick={() => setLines(lines.filter((_, j) => j !== i))} className="size-11 shrink-0 rounded-xl text-lg" style={{ backgroundColor: theme.soft }}>×</button>
+                    <button type="button" aria-label={`Remove ${channelName(l.channel)} ${l.format}`} onClick={() => removeLine(i)} className="size-11 shrink-0 rounded-xl text-lg" style={{ backgroundColor: theme.soft }}>×</button>
                   </li>
                 ))}
               </ul>
@@ -916,6 +1013,8 @@ export function CampaignWizard({ brandId, brandName, theme, banner, logo, people
     </div>
   );
 }
+
+const groupLabel = (id: string) => ALL_GROUPS.find((g) => g.id === id)?.label ?? id;
 
 function BackIcon() {
   return (
