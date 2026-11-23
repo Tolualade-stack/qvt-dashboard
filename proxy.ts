@@ -32,6 +32,8 @@ export async function proxy(request: NextRequest) {
   const user = data?.claims;
 
   const isLoginPage = request.nextUrl.pathname === "/login";
+  // The daily keep-awake check runs without a login (it reads nothing private).
+  if (request.nextUrl.pathname === "/api/health") return response;
   if (!user && !isLoginPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
