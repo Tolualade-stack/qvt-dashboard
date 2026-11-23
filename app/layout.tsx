@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Gabarito, Inter } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 // Body text.
@@ -22,8 +23,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en-GB" className={`${inter.variable} ${display.variable} h-full antialiased`}>
-      <body className="min-h-full bg-white font-sans text-ink">{children}</body>
+    // suppressHydrationWarning: the script below may add a class to <html> before the app loads.
+    <html lang="en-GB" className={`${inter.variable} ${display.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="min-h-full bg-white font-sans text-ink">
+        {/* Runs before the page is drawn: if the intro already played in this visit
+            (or the phone asks for less motion), hide it from the first frame. */}
+        <Script id="prime-intro-check" strategy="beforeInteractive">
+          {`try{if(sessionStorage.getItem("prime-intro-seen")==="1"||matchMedia("(prefers-reduced-motion: reduce)").matches)document.documentElement.classList.add("prime-intro-skip")}catch(e){}`}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

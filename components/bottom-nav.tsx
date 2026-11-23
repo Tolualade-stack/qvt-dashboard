@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { PrimeMark, PrimeWordmark } from "@/components/prime-logo";
 
-// The floating menu bar at the bottom of every screen. The centre "+" is the
+// Phones and tablets: the floating menu bar at the bottom of every screen.
+// Desktop (wide screens): the same links as a side menu down the left edge.
+// The centre "+" is the
 // main action: log an update. Admin and Team live inside Me, so the bar keeps
 // five large buttons for everyone; Create a Dashboard is on Home.
 
@@ -38,14 +41,19 @@ function Icon({ name }: { name: string }) {
   );
 }
 
-export function BottomNav() {
+function useIsActive() {
   const pathname = usePathname();
-  const isActive = (href: string) => {
-    if (href === "/") return pathname === "/" || pathname.startsWith("/brands");
+  return (href: string) => {
+    if (href === "/") return pathname === "/" || pathname.startsWith("/brands") || pathname.startsWith("/worlds");
     if (href === "/work") return pathname.startsWith("/work") || pathname.startsWith("/check-in");
     if (href === "/account") return pathname.startsWith("/account") || pathname.startsWith("/admin") || pathname.startsWith("/team");
     return pathname.startsWith(href);
   };
+}
+
+export function BottomNav() {
+  const pathname = usePathname();
+  const isActive = useIsActive();
 
   const left = [
     { href: "/", label: "Home", icon: "home" },
@@ -72,7 +80,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Main menu"
-      className="prime-gradient fixed inset-x-4 bottom-4 z-40 mx-auto flex h-[72px] max-w-md items-center justify-around rounded-[26px] px-2 shadow-2xl shadow-black/30"
+      className="prime-gradient fixed inset-x-4 bottom-4 z-40 mx-auto flex h-[72px] lg:hidden max-w-md items-center justify-around rounded-[26px] px-2 shadow-2xl shadow-black/30"
     >
       {left.map(item)}
       <Link
@@ -86,6 +94,61 @@ export function BottomNav() {
         </svg>
       </Link>
       {right.map(item)}
+    </nav>
+  );
+}
+
+export function SideNav({ name, roleLabel, workspace, isAdmin }: { name: string; roleLabel: string; workspace: string | null; isAdmin: boolean }) {
+  const pathname = usePathname();
+  const isActive = useIsActive();
+  const links = [
+    { href: "/", label: "Home", icon: "home" },
+    { href: "/work", label: "My work", icon: "work" },
+    { href: "/log", label: "Log", icon: "log" },
+    { href: "/account", label: isAdmin ? "Me & Admin" : "Me", icon: "account" },
+  ];
+
+  return (
+    <nav aria-label="Main menu" className="prime-gradient fixed inset-y-0 left-0 z-40 hidden w-[248px] flex-col px-4 py-6 text-white lg:flex">
+      <Link href="/" className="flex items-center gap-2.5 px-2" aria-label="PRIME home">
+        <PrimeMark size={36} />
+        <PrimeWordmark height={22} colour="#FFFFFF" />
+      </Link>
+      {workspace && <span className="mt-3 ml-2 self-start rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-[#C9D6F5]">{workspace}</span>}
+
+      <Link
+        href="/update"
+        aria-current={pathname === "/update" ? "page" : undefined}
+        className="mt-7 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white font-display text-base font-extrabold text-navy shadow-lg transition hover:scale-[1.02]"
+      >
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        Add an update
+      </Link>
+
+      <ul className="mt-6 space-y-1">
+        {links.map((link) => (
+          <li key={link.href}>
+            <Link
+              href={link.href}
+              aria-current={isActive(link.href) ? "page" : undefined}
+              className={`flex min-h-12 items-center gap-3 rounded-2xl px-3 text-[15px] font-semibold transition ${isActive(link.href) ? "bg-white/15 text-white" : "text-[#8FA3CC] hover:bg-white/5 hover:text-white"}`}
+            >
+              <Icon name={link.icon} />
+              {link.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      <Link href="/account" className="mt-auto flex items-center gap-3 rounded-2xl bg-white/5 p-3 transition hover:bg-white/10">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white font-display text-base font-black text-navy">
+          {name.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-bold">{name}</span>
+          <span className="block truncate text-xs text-[#8FA3CC]">{roleLabel}</span>
+        </span>
+      </Link>
     </nav>
   );
 }

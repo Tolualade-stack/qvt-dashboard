@@ -53,8 +53,11 @@ export default async function HomePage() {
   };
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-3xl bg-mist p-5">
+    <div data-wide className="space-y-5">
+      {/* Desktop: greeting and My work on the left, Create a Dashboard on the right. */}
+      <div className="space-y-5 lg:grid lg:grid-cols-3 lg:gap-5 lg:space-y-0">
+      <div className={`space-y-5 ${me.role === "admin" ? "lg:col-span-2" : "lg:col-span-3"}`}>
+      <section className="rounded-3xl bg-mist p-5 lg:p-7">
         <div className="text-sm text-muted">{longDate(new Date())}</div>
         <h1 className="mt-1 font-display text-[34px] font-black leading-none tracking-tight text-navy">
           {greeting(new Date())}, {me.name}.
@@ -100,10 +103,12 @@ export default async function HomePage() {
         </Link>
       )}
 
+      </div>
+
       {me.role === "admin" && (
         <Link
           href="/worlds/new"
-          className="prime-gradient relative block min-h-[290px] overflow-hidden rounded-[30px] text-white shadow-2xl shadow-navy/30 transition hover:brightness-110"
+          className="prime-gradient relative block min-h-[290px] overflow-hidden lg:h-full rounded-[30px] text-white shadow-2xl shadow-navy/30 transition hover:brightness-110"
         >
           <span aria-hidden="true" className="prime-float absolute -top-8 -right-16 opacity-15">
             <PGlyph size={250} colour="#FFFFFF" />
@@ -127,12 +132,14 @@ export default async function HomePage() {
         </Link>
       )}
 
-      <div className="flex items-baseline justify-between pt-2">
+      </div>
+
+      <div className="flex items-baseline justify-between pt-2 lg:pt-5">
         <h2 className="font-display text-2xl font-black text-navy">Your worlds</h2>
         <span className="text-sm font-semibold text-muted">{brands.length} brands</span>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 lg:gap-5">
         {brands.map((brand) => (
           <WorldCard
             key={brand.id}

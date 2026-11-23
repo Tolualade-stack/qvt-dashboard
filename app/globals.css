@@ -20,6 +20,9 @@
   background: linear-gradient(150deg, #1a3a86 0%, #0b1f4b 40%, #000000 100%);
 }
 
+/* The opening intro is in the page from the first frame; hidden when already seen. */
+.prime-intro-skip .prime-intro { display: none; }
+
 /* ---------- Animations (all switch off for people who prefer less motion) ---------- */
 
 /* Logo intro: the P tile bursts in, the live dot pops, the wordmark letters rise. */

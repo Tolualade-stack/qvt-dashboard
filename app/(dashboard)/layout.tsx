@@ -5,10 +5,12 @@ import { ROLE_LABELS } from "@/lib/types";
 import { signOut } from "@/app/login/actions";
 import { Button, Card } from "@/components/ui";
 import { PrimeMark, PrimeWordmark } from "@/components/prime-logo";
-import { BottomNav } from "@/components/bottom-nav";
+import { BottomNav, SideNav } from "@/components/bottom-nav";
 import { IntroSplash } from "@/components/intro-splash";
 
-// The frame around every logged-in page: header, floating menu bar.
+// The frame around every logged-in page: header and floating menu bar on
+// phones; a side menu on desktop. Pages that mark themselves data-wide (Home,
+// a world) spread across a wide screen; forms and lists stay a readable width.
 // The "(dashboard)" folder name groups these pages without adding to the URL.
 export default async function DashboardLayout({ children }: LayoutProps<"/">) {
   // Both at once, so the page waits for one round trip instead of two.
@@ -34,8 +36,9 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
   }
 
   return (
-    <div className="min-h-dvh pb-32">
-      <header className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-5 pt-5 pb-2">
+    <div className="min-h-dvh pb-32 lg:pb-12 lg:pl-[248px]">
+      <SideNav name={me.name} roleLabel={ROLE_LABELS[me.role]} workspace={workspace?.name ?? null} isAdmin={me.role === "admin"} />
+      <header className="mx-auto flex max-w-3xl lg:hidden items-center justify-between gap-3 px-5 pt-5 pb-2">
         <Link href="/" className="flex items-center gap-2.5" aria-label="PRIME home">
           <PrimeMark size={36} />
           <PrimeWordmark height={22} />
@@ -47,7 +50,7 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
           </span>
         </Link>
       </header>
-      <main className="mx-auto max-w-3xl px-5 py-4">{children}</main>
+      <main className="mx-auto max-w-3xl px-5 py-4 lg:px-10 lg:py-8 lg:has-[[data-wide]]:max-w-[1440px]">{children}</main>
       <BottomNav />
       <IntroSplash />
     </div>

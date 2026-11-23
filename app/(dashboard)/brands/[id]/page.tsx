@@ -175,9 +175,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
   return (
     <>
       {/* Hero: the banner photo fading into the brand's deep colour. */}
-      <section className="relative -mx-5 -mt-4 h-[340px] overflow-hidden text-white sm:mx-0 sm:mt-0 sm:rounded-t-[30px]" style={{ backgroundColor: theme.deep }}>
+      <section data-wide className="relative -mx-5 -mt-4 h-[340px] overflow-hidden text-white sm:mx-0 sm:mt-0 sm:rounded-t-[30px] lg:h-[380px]" style={{ backgroundColor: theme.deep }}>
         {banner ? (
-          <Image src={banner} alt="" fill priority sizes="(max-width: 768px) 100vw, 768px" className="prime-hero-zoom object-cover object-[center_30%]" />
+          <Image src={banner} alt="" fill priority sizes="(max-width: 768px) 100vw, (max-width: 1024px) 768px, 1440px" className="prime-hero-zoom object-cover object-[center_30%]" />
         ) : (
           <div aria-hidden="true" className="absolute inset-0" style={{ background: `linear-gradient(150deg, ${theme.main} 0%, ${theme.deep} 100%)` }} />
         )}
@@ -249,6 +249,11 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         </div>
       </div>
 
+      {/* Phones: one column, in this order. Desktop: the main work on the left,
+          attention, latest updates, team and links in a side column. */}
+      <div className="flex flex-col lg:mt-2 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="contents lg:block">
+      <div className="order-1 lg:order-none">
       {/* Brand profile */}
       <section aria-label="Brand profile" className="mt-4">
         {brand.about && <p className="text-[15px] leading-relaxed text-[#2B1A18]">{brand.about}</p>}
@@ -281,20 +286,13 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           ))}
         </ul>
       </section>
+      </div>
 
+      <div className="order-2 lg:order-none">
       <CampaignList brandId={brand.id} campaigns={campaigns} theme={theme} canAdd={me.role === "admin"} />
+      </div>
 
-      {/* Needs attention: anything late here, with who to escalate to. */}
-      {flags.length > 0 && (
-        <section className="mt-6">
-          <div className="mb-2.5 flex items-baseline justify-between gap-2">
-            <h2 className="font-display text-2xl font-black">Needs attention <span className="text-lg text-muted">· {flags.length}</span></h2>
-            {flags.length > 4 && <Link href="/attention" className="text-sm font-bold" style={{ color: theme.ink }}>See all →</Link>}
-          </div>
-          <FlagList flags={flags.slice(0, 4)} />
-        </section>
-      )}
-
+      <div className="order-4 lg:order-none">
       <WorldPerformance
         channels={channels.map((c) => ({ id: c.id, label: c.label, formats: c.formats }))}
         theme={theme}
@@ -303,7 +301,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         overview={overview}
         metrics={Object.fromEntries([["all", summarise(metricRows, null)], ...brand.channels.map((c) => [c, summarise(metricRows, c)])])}
       />
+      </div>
 
+      <div className="order-5 lg:order-none">
       {/* Budget spread: the media plan's lines, filling up as ad spend is logged. */}
       <section className="mt-5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
         <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -318,7 +318,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           <p className="text-sm text-muted">No budget from the media plan yet. Once it&apos;s added, ad spend fills each line as ads are updated.</p>
         )}
       </section>
+      </div>
 
+      <div className="order-6 lg:order-none">
       {/* TV and Radio: spots aired this month against the plan. */}
       {brand.marketing_types.includes("traditional") && (
         <section className="mt-3.5 grid grid-cols-2 gap-2.5">
@@ -342,7 +344,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           })}
         </section>
       )}
+      </div>
 
+      <div className="order-7 lg:order-none">
       {/* Creative assets deployed */}
       <section className="mt-3.5 flex items-center gap-4 rounded-[22px] bg-ink p-5 text-white">
         <svg role="img" aria-label={`${assetsDone} of ${assetsTarget ?? "no target"} creative assets deployed`} width="96" height="96" viewBox="0 0 100 100" className="shrink-0">
@@ -360,7 +364,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           </div>
         </div>
       </section>
+      </div>
 
+      <div className="order-8 lg:order-none">
       {/* Content this month: one bar split by where each piece is now. */}
       <section className="mt-3.5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
         <div className="flex items-baseline justify-between gap-2">
@@ -398,7 +404,23 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           See all content →
         </Link>
       </section>
+      </div>
+      </div>
+      <div className="contents lg:block">
+      <div className="order-3 lg:order-none">
+      {/* Needs attention: anything late here, with who to escalate to. */}
+      {flags.length > 0 && (
+        <section className="mt-6">
+          <div className="mb-2.5 flex items-baseline justify-between gap-2">
+            <h2 className="font-display text-2xl font-black">Needs attention <span className="text-lg text-muted">· {flags.length}</span></h2>
+            {flags.length > 4 && <Link href="/attention" className="text-sm font-bold" style={{ color: theme.ink }}>See all →</Link>}
+          </div>
+          <FlagList flags={flags.slice(0, 4)} />
+        </section>
+      )}
+      </div>
 
+      <div className="order-9 lg:order-none">
       {/* Latest in this world */}
       <section className="mt-5">
         <h2 className="mb-1.5 font-display text-[22px] font-black">Latest in this world</h2>
@@ -419,7 +441,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           ))}
         </ul>
       </section>
+      </div>
 
+      <div className="order-10 lg:order-none">
       {/* Team & roles */}
       <section className="mt-5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
         <h2 className="mb-1 text-base font-bold">Team &amp; roles</h2>
@@ -446,7 +470,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
           })}
         </ul>
       </section>
+      </div>
 
+      <div className="order-11 lg:order-none">
       {/* Monthly Canva content calendar */}
       <section className="mt-3.5 rounded-[22px] border-[1.5px] p-5" style={{ borderColor: theme.soft }}>
         <h2 className="text-base font-bold">Monthly Canva content calendar</h2>
@@ -462,16 +488,21 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         )}
         {canEdit && <CanvaLinkForm brandId={brand.id} currentUrl={brand.canva_calendar_url ?? ""} />}
       </section>
+      </div>
 
+      <div className="order-12 lg:order-none">
       {/* Start afresh: clears old work and history, keeps the world itself. Admin only. */}
       {me.role === "admin" && <StartAfreshForm brandId={brand.id} brandName={brand.name} theme={theme} />}
+      </div>
+      </div>
+      </div>
 
       {/* The world's own Update button, floating just above the menu bar. */}
       {canEdit && (
         <Link
           href={`/brands/${brand.id}/update`}
           aria-label={`Add an update to ${brand.name}`}
-          className="fixed right-5 bottom-[104px] z-30 inline-flex h-[58px] items-center gap-2.5 rounded-[22px] px-[22px] font-display text-[17px] font-extrabold transition hover:scale-105"
+          className="fixed right-5 bottom-[104px] z-30 lg:right-10 lg:bottom-8 inline-flex h-[58px] items-center gap-2.5 rounded-[22px] px-[22px] font-display text-[17px] font-extrabold transition hover:scale-105"
           style={{ background: `linear-gradient(135deg, ${theme.main} 0%, ${theme.deep} 100%)`, color: theme.onMain, boxShadow: `0 14px 30px ${theme.main}73` }}
         >
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>

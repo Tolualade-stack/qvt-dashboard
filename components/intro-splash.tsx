@@ -1,32 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PrimeMark, PrimeWordmark } from "@/components/prime-logo";
 
 // The animated PRIME logo shown full-screen when the app is opened, once per
 // visit (it stays away while you move between screens). Tap to skip.
-// Skipped entirely for people whose phone is set to reduce motion.
+//
+// It is part of the page from the very first frame (not added once the app's
+// code has loaded), so the screen never flashes the page and then jumps to the
+// intro. A tiny script in the root layout hides it straight away when it has
+// already played in this visit, or when the phone is set to reduce motion.
 
 const SEEN_KEY = "prime-intro-seen";
 
 export function IntroSplash() {
-  const [phase, setPhase] = useState<"hidden" | "showing" | "leaving">("hidden");
+  const [phase, setPhase] = useState<"showing" | "leaving" | "hidden">("showing");
+  // Decided once per opening (kept if React runs this setup twice).
+  const skipRef = useRef<boolean | null>(null);
 
   useEffect(() => {
-    let seen = false;
-    try {
-      seen = sessionStorage.getItem(SEEN_KEY) === "1";
-      sessionStorage.setItem(SEEN_KEY, "1");
-    } catch {
-      // Storage blocked (private mode): just show it each time.
+    if (skipRef.current === null) {
+      let seen = false;
+      try {
+        seen = sessionStorage.getItem(SEEN_KEY) === "1";
+        sessionStorage.setItem(SEEN_KEY, "1");
+      } catch {
+        // Storage blocked (private mode): just show it each time.
+      }
+      skipRef.current = seen || document.documentElement.classList.contains("prime-intro-skip") || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     }
-    if (seen || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const skip = skipRef.current;
 
-    // Deferred a tick so the first paint shows the intro, not a flash of the page.
-    const show = setTimeout(() => setPhase("showing"), 0);
-    const leave = setTimeout(() => setPhase("leaving"), 2400);
-    const hide = setTimeout(() => setPhase("hidden"), 2900);
-    return () => [show, leave, hide].forEach(clearTimeout);
+    // Timed from now: the animation started with the first frame, so by the
+    // time it fades it has always played in full.
+    const timers = skip
+      ? [setTimeout(() => setPhase("hidden"), 0)]
+      : [setTimeout(() => setPhase("leaving"), 2400), setTimeout(() => setPhase("hidden"), 2900)];
+    return () => timers.forEach(clearTimeout);
   }, []);
 
   if (phase === "hidden") return null;
@@ -36,7 +46,7 @@ export function IntroSplash() {
       type="button"
       aria-label="Skip intro"
       onClick={() => setPhase("hidden")}
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-[linear-gradient(160deg,#0B1F4B_0%,#071433_45%,#000000_100%)] transition-opacity duration-500 ${phase === "leaving" ? "opacity-0" : "opacity-100"}`}
+      className={`prime-intro fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-[linear-gradient(160deg,#0B1F4B_0%,#071433_45%,#000000_100%)] transition-opacity duration-500 ${phase === "leaving" ? "opacity-0" : "opacity-100"}`}
     >
       <span
         aria-hidden="true"
