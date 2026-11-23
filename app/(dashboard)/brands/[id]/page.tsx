@@ -24,6 +24,7 @@ import { CampaignList, type CampaignSummary } from "@/components/campaign-list";
 import { CanvaLinkForm } from "./canva-link-form";
 import { RemoveButton } from "@/components/remove-button";
 import { removeCanvaLink } from "./remove-actions";
+import { StartAfreshForm } from "./start-afresh-form";
 
 // A brand's world, laid out like the PRIME mock-up: banner hero, logo and
 // profile, performance, creative assets, content progress and the latest updates.
@@ -114,7 +115,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
     old_data: null,
     new_data: { note: n.note },
   }));
+  // After a fresh start, the feed begins at the reset.
   const history = [...((historyRows ?? []) as AuditEntry[]), ...((contentHistory ?? []) as AuditEntry[]), ...noteEntries]
+    .filter((e) => !brand.fresh_start_at || e.changed_at >= brand.fresh_start_at)
     .sort((a, b) => b.changed_at.localeCompare(a.changed_at))
     .slice(0, 8);
   const coverName = people.get(brand.leave_cover_person_id ?? "")?.full_name;
@@ -459,6 +462,9 @@ export default async function WorldPage({ params }: PageProps<"/brands/[id]">) {
         )}
         {canEdit && <CanvaLinkForm brandId={brand.id} currentUrl={brand.canva_calendar_url ?? ""} />}
       </section>
+
+      {/* Start afresh: clears old work and history, keeps the world itself. Admin only. */}
+      {me.role === "admin" && <StartAfreshForm brandId={brand.id} brandName={brand.name} theme={theme} />}
 
       {/* The world's own Update button, floating just above the menu bar. */}
       {canEdit && (

@@ -62,6 +62,7 @@ export function describeChange(entry: AuditEntry): string {
 
   if (entry.table_name === "brands" && entry.action === "update") {
     const fields = changedFields(entry);
+    if (fields.includes("fresh_start_at")) return `started ${label} afresh (old work and history cleared)`;
     if (fields.length === 1 && fields[0] === "leave_mode_on") {
       return `turned Leave Mode ${entry.new_data?.leave_mode_on ? "on" : "off"} for ${label}`;
     }

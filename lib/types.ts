@@ -17,6 +17,7 @@ export type Brand = {
   canva_calendar_url: string | null;
   leave_cover_person_id: string | null;
   leave_mode_on: boolean;
+  fresh_start_at: string | null;
   workspace_id: string;
   is_archived: boolean;
   about: string | null;

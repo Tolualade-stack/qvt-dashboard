@@ -61,6 +61,30 @@ export async function deleteCampaign(campaignId: string, brandId: string): Promi
   return { ok: true, message: "Campaign deleted." };
 }
 
+// Starts a world afresh: clears its campaigns, content, ads, reports, numbers,
+// budget, notes and plan files, but keeps the world itself (name, logo, colours,
+// profile, team, Leave Mode). The Admin types the brand's name to confirm.
+export async function startAfresh(brandId: string, typedName: string): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data: brand } = await supabase.from("brands").select("name").eq("id", brandId).single();
+  if (!brand) return { ok: false, message: "That world no longer exists." };
+  if (typedName.trim().toLowerCase() !== brand.name.trim().toLowerCase()) {
+    return { ok: false, message: `Type "${brand.name}" exactly to confirm.` };
+  }
+
+  const { error } = await supabase.rpc("start_brand_afresh", { p_brand: brandId });
+  if (error) return { ok: false, message: error.message };
+
+  // Uploaded media plans and strategies (the logo and banner are kept).
+  const storage = createAdminClient().storage.from("brand-documents");
+  const { data: files } = await storage.list(brandId, { limit: 1000 });
+  if (files?.length) await storage.remove(files.map((f) => `${brandId}/${f.name}`));
+
+  refresh(brandId);
+  return { ok: true, message: `${brand.name} is fresh. Its world, logo and team are still here.` };
+}
+
 // Deletes a brand world and everything in it, for good. The Admin types the
 // brand's name to confirm. Its images and uploaded files are removed too.
 export async function deleteBrand(brandId: string, typedName: string): Promise<Result> {
